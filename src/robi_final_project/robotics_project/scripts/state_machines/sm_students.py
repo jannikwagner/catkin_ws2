@@ -15,6 +15,9 @@ from actionlib import SimpleActionClient
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from nav_msgs.msg import Odometry
 
+# Added by us
+from moveit_msgs.msg import PickupActionGoal
+
 from moveit_msgs.msg import MoveItErrorCodes
 moveit_error_dict = {}
 for name in MoveItErrorCodes.__dict__.keys():
@@ -32,6 +35,7 @@ class StateMachine(object):
         self.mv_head_srv_nm = rospy.get_param(rospy.get_name() + '/move_head_srv')
 
         # Subscribe to topics
+        rospy.Subscriber("/pickup/goal", PickupActionGoal)
 
         # Wait for service providers
         rospy.wait_for_service(self.mv_head_srv_nm, timeout=30)
@@ -57,6 +61,14 @@ class StateMachine(object):
 
         while not rospy.is_shutdown() and self.state != 4:
             
+            # State 0:
+            #if self.state == 0:
+                # Subscribe to /pickup/goal from /manipulation_server
+            #    a = 0
+                # Figure out where to send the grasp pose to get path to the goal?
+                
+
+
             # State 0: Move the robot "manually" to door
             if self.state == 0:
                 move_msg = Twist()
