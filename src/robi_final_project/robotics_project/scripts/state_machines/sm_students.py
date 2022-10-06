@@ -16,7 +16,8 @@ from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from nav_msgs.msg import Odometry
 
 # Added by us
-from moveit_msgs.msg import PickupActionGoal
+from moveit_msgs.msg import PickupActionGoal, PickupAction, PlaceAction
+from play_motion_msgs.msg import PlayMotionActionGoal
 
 from moveit_msgs.msg import MoveItErrorCodes
 moveit_error_dict = {}
@@ -25,47 +26,112 @@ for name in MoveItErrorCodes.__dict__.keys():
         code = MoveItErrorCodes.__dict__[name]
         moveit_error_dict[code] = name
 
+
+def callback_pickup(data):
+    rospy.loginfo(rospy.get_caller_id() + "I heard %s", data.data)
+
+
+
 class StateMachine(object):
     def __init__(self):
         
         self.node_name = "Student SM"
+        self.manipulation_client_name = "manipulation_client"
 
         # Access rosparams
-        self.cmd_vel_top = rospy.get_param(rospy.get_name() + '/cmd_vel_topic')
+        self.pick_srv_nm = rospy.get_param(rospy.get_name() + '/pick_srv')
+        rospy.loginfo("%s: pick_srv_nm: %s", self.node_name, self.pick_srv_nm)
+        self.place_srv_nm = rospy.get_param(rospy.get_name() + '/place_srv')
         self.mv_head_srv_nm = rospy.get_param(rospy.get_name() + '/move_head_srv')
 
+        self.cmd_vel_top = rospy.get_param(rospy.get_name() + '/cmd_vel_topic')
+        self.pickup_pose_top = rospy.get_param(self.manipulation_client_name + '/pickup_marker_pose')  # TODO replace with rospy.get_name() and adjust launch
+        self.place_pose_top = rospy.get_param(self.manipulation_client_name + '/place_marker_pose')
+        self.aruco_pose_top = rospy.get_param(self.manipulation_client_name + '/marker_pose_topic') # Publish a PoseStamped with the cube pose here so that we can pick in manip_client (Line 160)
+
+        self.cube_pose = rospy.get_param(rospy.get_name() + '/cube_pose')
+
         # Subscribe to topics
-        rospy.Subscriber("/pickup/goal", PickupActionGoal)
+        # rospy.Subscriber("/pickup/goal", PickupActionGoal, callback_pickup)
 
         # Wait for service providers
         rospy.wait_for_service(self.mv_head_srv_nm, timeout=30)
+        rospy.wait_for_service(self.pick_srv_nm, timeout=30)
+        rospy.wait_for_service(self.place_srv_nm, timeout=30)
 
         # Instantiate publishers
         self.cmd_vel_pub = rospy.Publisher(self.cmd_vel_top, Twist, queue_size=10)
+        self.aruco_pose_pub = rospy.Publisher(self.aruco_pose_top, PoseStamped, queue_size=1)
 
         # Set up action clients
         rospy.loginfo("%s: Waiting for play_motion action server...", self.node_name)
         self.play_motion_ac = SimpleActionClient("/play_motion", PlayMotionAction)
         if not self.play_motion_ac.wait_for_server(rospy.Duration(1000)):
-            rospy.logerr("%s: Could not connect to /play_motion action server", self.node_name)
+            rospy.logerr("%s: Could not connect to play_motion action server", self.node_name)
             exit()
         rospy.loginfo("%s: Connected to play_motion action server", self.node_name)
+
+        # rospy.loginfo("%s: Waiting for pickup action server...", self.node_name)
+        # self.pickup_ac = SimpleActionClient("/pickup", PickupAction)
+        # if not self.pickup_ac.wait_for_server(rospy.Duration(1000)):
+        #     rospy.logerr("%s: Could not connect to pickup action server", self.node_name)
+        #     exit()
+        # rospy.loginfo("%s: Connected to pickup action server", self.node_name)
+
+        # rospy.loginfo("%s: Waiting for place action server...", self.node_name)
+        # self.place_ac = SimpleActionClient("/place", PlaceAction)
+        # if not self.place_ac.wait_for_server(rospy.Duration(1000)):
+        #     rospy.logerr("%s: Could not connect to place action server", self.node_name)
+        #     exit()
+        # rospy.loginfo("%s: Connected to place action server", self.node_name)
+
+        
 
         # Init state machine
         self.state = 0
         rospy.sleep(3)
         self.check_states()
 
-
     def check_states(self):
 
         while not rospy.is_shutdown() and self.state != 4:
             
             # State 0:
-            #if self.state == 0:
-                # Subscribe to /pickup/goal from /manipulation_server
-            #    a = 0
-                # Figure out where to send the grasp pose to get path to the goal?
+            if self.state == 0:
+
+                rospy.loginfo("%s: cube_pose: %s", self.node_name, self.cube_pose)
+                
+                # cube pose = "0.50306828716, 0.0245718046511, 0.915538062216, 0.0144467629456, 0.706141958739, 0.707257659069, -0.0306827123383"
+                cube_ps = PoseStamped()
+                cube_ps.pose.position.x = 0.50306828716
+                cube_ps.pose.position.y = 0.0245718046511
+                cube_ps.pose.position.z = 0.915538062216
+                cube_ps.pose.orientation.w = 0.0144467629456
+                cube_ps.pose.orientation.x = 0.706141958739
+                cube_ps.pose.orientation.y = 0.707257659069
+                cube_ps.pose.orientation.z = -0.0306827123383
+                self.aruco_pose_pub.publish(cube_ps) # Publish the aruco pose for manip client to receive
+
+
+                try:
+                    rospy.loginfo("%s: Pick up goal", self.node_name)
+                    pick_srv = rospy.ServiceProxy(self.pick_srv_nm, SetBool)
+                    
+                    request = SetBoolRequest(True)
+                    pick_srv_req = pick_srv(request)
+
+                    
+                    if pick_srv_req.success == True:
+                        self.state = 4
+                        rospy.loginfo("%s: Pickup succeeded!", self.node_name)
+                    else:
+                        rospy.loginfo("%s: Pickup failed!", self.node_name)
+                        self.state = 5
+
+                    rospy.sleep(3)
+                
+                except rospy.ServiceException, e:
+                    print "Service call to move_head server failed: %s"%e
                 
 
 
