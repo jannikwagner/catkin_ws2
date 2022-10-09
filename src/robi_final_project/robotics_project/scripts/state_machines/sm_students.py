@@ -49,7 +49,11 @@ class StateMachine(object):
         self.place_pose_top = rospy.get_param(self.manipulation_client_name + '/place_marker_pose')
         self.aruco_pose_top = rospy.get_param(self.manipulation_client_name + '/marker_pose_topic') # Publish a PoseStamped with the cube pose here so that we can pick in manip_client (Line 160)
 
-        self.cube_pose = rospy.get_param(rospy.get_name() + '/cube_pose')
+        self.cube_pose_str = rospy.get_param(rospy.get_name() + '/cube_pose')
+        self.cube_pose =  self.extract_cube_pose(self.cube_pose_str)
+        rospy.loginfo("%s: cube_pose: %s", self.node_name, self.cube_pose_str)
+        # cube pose = "0.50306828716, 0.0245718046511, 0.915538062216, 0.0144467629456, 0.706141958739, 0.707257659069, -0.0306827123383"
+        rospy.loginfo("%s: cube_pose: %s", self.node_name, self.cube_pose)
 
         # Subscribe to topics
         # rospy.Subscriber("/pickup/goal", PickupActionGoal, callback_pickup)
@@ -99,18 +103,7 @@ class StateMachine(object):
             # State 0:
             if self.state == 0:
 
-                rospy.loginfo("%s: cube_pose: %s", self.node_name, self.cube_pose)
-                
-                # cube pose = "0.50306828716, 0.0245718046511, 0.915538062216, 0.0144467629456, 0.706141958739, 0.707257659069, -0.0306827123383"
-                cube_ps = PoseStamped()
-                cube_ps.pose.position.x = 0.50306828716
-                cube_ps.pose.position.y = 0.0245718046511
-                cube_ps.pose.position.z = 0.915538062216
-                cube_ps.pose.orientation.w = 0.0144467629456
-                cube_ps.pose.orientation.x = 0.706141958739
-                cube_ps.pose.orientation.y = 0.707257659069
-                cube_ps.pose.orientation.z = -0.0306827123383
-                self.aruco_pose_pub.publish(cube_ps) # Publish the aruco pose for manip client to receive
+                self.aruco_pose_pub.publish(self.cube_pose) # Publish the aruco pose for manip client to receive
 
 
                 try:
@@ -222,6 +215,18 @@ class StateMachine(object):
 
         rospy.loginfo("%s: State machine finished!", self.node_name)
         return
+
+    def extract_cube_pose(self, cube_pose_string):
+        px, py, pz, rx, ry, rz, rw = (float(val) for val in cube_pose_string.split(", "))
+        cube_pose = PoseStamped()
+        cube_pose.pose.position.x = px
+        cube_pose.pose.position.y = py
+        cube_pose.pose.position.z = pz
+        cube_pose.pose.orientation.x = rx
+        cube_pose.pose.orientation.y = ry
+        cube_pose.pose.orientation.z = rz
+        cube_pose.pose.orientation.w = rw
+        return cube_pose
 
 
 # import py_trees as pt, py_trees_ros as ptr
