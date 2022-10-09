@@ -78,8 +78,8 @@
     <node pkg="robotics_project" type="sm_students.py" name="logic_state_machine" output="screen">
       <param name="global_loc_srv" value=""/>
       <param name="clear_costmaps_srv"  value=""/>
-      <param name="pick_srv"            value="/place_holder5"/>
-      <param name="place_srv"           value="/place_holder6"/>
+      <param name="pick_srv"            value="/pick_srv_serice"/>
+      <param name="place_srv"           value="/place_srv_service"/>
       <param name="nav_goal_topic"      value=""/>
       <param name="cmd_vel_topic"       value="/key_vel"/>
       <param name="move_base_frame"     value=""/>
@@ -105,11 +105,11 @@
     <!-- Node exposing service to trigger the pick and place -->
     <node pkg="robotics_project" name="manipulation_client" type="manipulation_client.py" output="screen">  
       <param name="marker_pose_topic"   value="/place_holder4"/>
-      <param name="pick_srv"            value="/place_holder5"/>
-      <param name="place_srv"           value="/place_holder6"/>
+      <param name="pick_srv"            value="/pick_srv_serice"/>
+      <param name="place_srv"           value="/place_srv_service"/>
       <param name="move_head_srv"       value="/$(arg namespace_project)/move_head_gui"/>
-      <param name="pickup_marker_pose"  value="/place_holder8"/>
-      <param name="place_marker_pose"   value="/place_holder9"/>
+      <param name="pickup_marker_pose"  value="/pickup_marker_pose_topic"/>
+      <param name="place_marker_pose"   value="/place_marker_pose_topic"/>
     </node>
 
     <!-- Aruco marker detector -->
@@ -127,8 +127,8 @@
   <!-- Arm manipulation node -->
   <node pkg="robotics_project" name="manipulation_server" type="manipulation_server.py" output="screen">
       <rosparam command="load" file="$(find robotics_project)/config/pick_and_place_params.yaml" />
-      <param name="pickup_marker_pose"  value="/place_holder10" />
-      <param name="place_marker_pose"   value="/place_holder11" />
+      <param name="pickup_marker_pose"  value="/pickup_marker_pose_topic" />
+      <param name="place_marker_pose"   value="/place_marker_pose_topic" />
   </node>
 
 

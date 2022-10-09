@@ -89,8 +89,6 @@ class StateMachine(object):
         #     exit()
         # rospy.loginfo("%s: Connected to place action server", self.node_name)
 
-        
-
         # Init state machine
         self.state = 0
         rospy.sleep(3)
@@ -106,30 +104,31 @@ class StateMachine(object):
                 self.aruco_pose_pub.publish(self.cube_pose) # Publish the aruco pose for manip client to receive
 
 
-                try:
-                    rospy.loginfo("%s: Pick up goal", self.node_name)
-                    pick_srv = rospy.ServiceProxy(self.pick_srv_nm, SetBool)
-                    
-                    request = SetBoolRequest(True)
-                    pick_srv_req = pick_srv(request)
-
-                    
-                    if pick_srv_req.success == True:
-                        self.state = 4
-                        rospy.loginfo("%s: Pickup succeeded!", self.node_name)
-                    else:
-                        rospy.loginfo("%s: Pickup failed!", self.node_name)
-                        self.state = 5
-
-                    rospy.sleep(3)
+            # try:
+                rospy.loginfo("%s: Pick up goal", self.node_name)
+                pick_srv = rospy.ServiceProxy(self.pick_srv_nm, SetBool)
                 
-                except rospy.ServiceException, e:
-                    print "Service call to move_head server failed: %s"%e
+                request = SetBoolRequest(True)
+                pick_srv_req = pick_srv(request)
+
+                
+                if pick_srv_req.success == True:
+                    self.state = 4
+                    rospy.loginfo("%s: Pickup succeeded!", self.node_name)
+                else:
+                    rospy.loginfo("%s: Pickup failed!", self.node_name)
+                    self.state = 5
+
+                rospy.sleep(3)
+            
+            # except rospy.ServiceException, e:
+            #     print "Service call to move_head server failed: %s"%e
+            #     raise RuntimeError()
                 
 
 
             # State 0: Move the robot "manually" to door
-            if self.state == 0:
+            if self.state == -1:
                 move_msg = Twist()
                 move_msg.linear.x = 1
 
@@ -146,7 +145,7 @@ class StateMachine(object):
                 rospy.sleep(1)
 
             # State 1:  Tuck arm 
-            if self.state == 1:
+            if self.state == -1:
                 rospy.loginfo("%s: Tucking the arm...", self.node_name)
                 goal = PlayMotionGoal()
                 goal.motion_name = 'home'
@@ -165,7 +164,7 @@ class StateMachine(object):
                 rospy.sleep(1)
 
             # State 2:  Move the robot "manually" to chair
-            if self.state == 2:
+            if self.state == -1:
                 move_msg = Twist()
                 move_msg.angular.z = -1
 
@@ -190,7 +189,7 @@ class StateMachine(object):
                 rospy.sleep(1)
 
             # State 3:  Lower robot head service
-            if self.state == 3:
+            if self.state == -1:
             	try:
                     rospy.loginfo("%s: Lowering robot head", self.node_name)
                     move_head_srv = rospy.ServiceProxy(self.mv_head_srv_nm, MoveHead)
