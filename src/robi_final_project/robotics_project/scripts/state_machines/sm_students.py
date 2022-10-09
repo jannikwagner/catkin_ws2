@@ -50,7 +50,8 @@ class StateMachine(object):
         self.aruco_pose_top = rospy.get_param(self.manipulation_client_name + '/marker_pose_topic') # Publish a PoseStamped with the cube pose here so that we can pick in manip_client (Line 160)
 
         self.cube_pose_str = rospy.get_param(rospy.get_name() + '/cube_pose')
-        self.cube_pose =  self.extract_cube_pose(self.cube_pose_str)
+        self.robot_base_frame = rospy.get_param(rospy.get_name() + '/robot_base_frame')
+        self.cube_pose =  self.extract_cube_pose(self.cube_pose_str, self.robot_base_frame)
         rospy.loginfo("%s: cube_pose: %s", self.node_name, self.cube_pose_str)
         # cube pose = "0.50306828716, 0.0245718046511, 0.915538062216, 0.0144467629456, 0.706141958739, 0.707257659069, -0.0306827123383"
         rospy.loginfo("%s: cube_pose: %s", self.node_name, self.cube_pose)
@@ -97,6 +98,7 @@ class StateMachine(object):
     def check_states(self):
 
         while not rospy.is_shutdown() and self.state != 4:
+            rospy.loginfo("%s: check_states while loop", self.node_name)
             
             # State 0:
             if self.state == 0:
@@ -215,9 +217,10 @@ class StateMachine(object):
         rospy.loginfo("%s: State machine finished!", self.node_name)
         return
 
-    def extract_cube_pose(self, cube_pose_string):
+    def extract_cube_pose(self, cube_pose_string, frame):
         px, py, pz, rx, ry, rz, rw = (float(val) for val in cube_pose_string.split(", "))
         cube_pose = PoseStamped()
+        cube_pose.header.frame_id = frame
         cube_pose.pose.position.x = px
         cube_pose.pose.position.y = py
         cube_pose.pose.position.z = pz
