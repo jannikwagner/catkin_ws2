@@ -96,8 +96,10 @@ class StateMachine(object):
         self.check_states()
 
     def check_states(self):
+        ERROR_STATE = "error"
+        SUCCESS_STATE = "success"
 
-        while not rospy.is_shutdown() and self.state != 4:
+        while not rospy.is_shutdown() and self.state != SUCCESS_STATE:
             rospy.loginfo("%s: check_states while loop", self.node_name)
             
             # State 0:  Tuck arm 
@@ -115,7 +117,7 @@ class StateMachine(object):
                 else:
                     self.play_motion_ac.cancel_goal()
                     rospy.logerr("%s: play_motion failed to tuck arm, reset simulation", self.node_name)
-                    self.state = 5
+                    self.state = ERROR_STATE
 
                 rospy.sleep(1)
 
@@ -137,7 +139,7 @@ class StateMachine(object):
                     rospy.loginfo("%s: Pickup succeeded!", self.node_name)
                 else:
                     rospy.loginfo("%s: Pickup failed!", self.node_name)
-                    self.state = 5
+                    self.state = ERROR_STATE
 
                 rospy.sleep(3)
 
@@ -148,7 +150,6 @@ class StateMachine(object):
                 move_msg.angular.z = 1
 
                 rate = rospy.Rate(10)
-                converged = False
                 cnt = 0
                 rospy.loginfo("%s: Rotating", self.node_name)
                 while not rospy.is_shutdown() and cnt < 25:
@@ -156,27 +157,18 @@ class StateMachine(object):
                     rate.sleep()
                     cnt = cnt + 1
 
-                self.state = 3
-                rospy.sleep(1)
-
-
-            # State 3: Move the robot "manually" to other table
-            if self.state == 3:
-                move_msg = Twist()
+                # Move straight to other table
+                move_msg.angular.z = 0
                 move_msg.linear.x = 1
-
-                rate = rospy.Rate(10)
-                converged = False
                 cnt = 0
                 rospy.loginfo("%s: Moving towards door", self.node_name)
-                while not rospy.is_shutdown() and cnt < 25:
+                while not rospy.is_shutdown() and cnt < 8:
                     self.cmd_vel_pub.publish(move_msg)
                     rate.sleep()
                     cnt = cnt + 1
 
-                self.state = 4
+                self.state = SUCCESS_STATE
                 rospy.sleep(1)
-
 
             # State 2:  Move the robot "manually" to chair
             if self.state == -1:
@@ -223,7 +215,7 @@ class StateMachine(object):
                     print "Service call to move_head server failed: %s"%e
 
             # Error handling
-            if self.state == 5:
+            if self.state == ERROR_STATE:
                 rospy.logerr("%s: State machine failed. Check your code and try again!", self.node_name)
                 return
 
