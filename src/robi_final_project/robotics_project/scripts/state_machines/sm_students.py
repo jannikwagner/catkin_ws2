@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import math
 import numpy as np
 from numpy import linalg as LA
 
@@ -149,26 +150,49 @@ class StateMachine(object):
                 move_msg = Twist()
                 move_msg.angular.z = 1
 
-                rate = rospy.Rate(10)
+                rate_val = 10
+                rate = rospy.Rate(rate_val)
                 cnt = 0
                 rospy.loginfo("%s: Rotating", self.node_name)
-                while not rospy.is_shutdown() and cnt < 25:
+                while not rospy.is_shutdown() and cnt < math.pi * rate_val +1:
                     self.cmd_vel_pub.publish(move_msg)
                     rate.sleep()
                     cnt = cnt + 1
 
                 # Move straight to other table
                 move_msg.angular.z = 0
-                move_msg.linear.x = 1
+                move_msg.linear.x = 0.8
                 cnt = 0
                 rospy.loginfo("%s: Moving towards door", self.node_name)
-                while not rospy.is_shutdown() and cnt < 8:
+                while not rospy.is_shutdown() and cnt < 10:
                     self.cmd_vel_pub.publish(move_msg)
                     rate.sleep()
                     cnt = cnt + 1
 
-                self.state = SUCCESS_STATE
+                self.state = 3
                 rospy.sleep(1)
+
+            # State 4: Place cube
+            if self.state == 3:
+
+                # self.aruco_pose_pub.publish(self.cube_pose) # Publish the aruco pose for manip client to receive
+
+                rospy.loginfo("%s: Place goal", self.node_name)
+                place_srv = rospy.ServiceProxy(self.place_srv_nm, SetBool)
+                
+                request = SetBoolRequest(True)
+                place_srv_req = place_srv(request)
+
+                
+                if place_srv_req.success == True:
+                    self.state = SUCCESS_STATE
+                    rospy.loginfo("%s: Place succeeded!", self.node_name)
+                else:
+                    rospy.loginfo("%s: Place failed!", self.node_name)
+                    self.state = ERROR_STATE
+
+                rospy.sleep(3)
+
 
             # State 2:  Move the robot "manually" to chair
             if self.state == -1:
