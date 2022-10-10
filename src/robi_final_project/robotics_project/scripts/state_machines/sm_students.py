@@ -145,26 +145,29 @@ class StateMachine(object):
                 rospy.sleep(3)
 
 
-            # State 2: Rotate the robot "manually"
+            # State 2: Rotate and move the robot "manually"
             if self.state == 2:
                 move_msg = Twist()
-                move_msg.angular.z = 1
-
                 rate_val = 10
                 rate = rospy.Rate(rate_val)
+
+                # Move straight to other table
+                move_msg.angular.z = 0
+                move_msg.linear.x = -1
                 cnt = 0
-                rospy.loginfo("%s: Rotating", self.node_name)
-                while not rospy.is_shutdown() and cnt < math.pi * rate_val +1:
+                rospy.loginfo("%s: Moving towards door", self.node_name)
+                while not rospy.is_shutdown() and cnt < 50:
                     self.cmd_vel_pub.publish(move_msg)
                     rate.sleep()
                     cnt = cnt + 1
 
-                # Move straight to other table
-                move_msg.angular.z = 0
-                move_msg.linear.x = 0.8
+                # rotate
+                move_msg.angular.z = 0.5
+                move_msg.linear.x = 0
+                rotation_steps = int(2 * math.pi * rate_val)
                 cnt = 0
-                rospy.loginfo("%s: Moving towards door", self.node_name)
-                while not rospy.is_shutdown() and cnt < 10:
+                rospy.loginfo("%s: Rotating", self.node_name)
+                while not rospy.is_shutdown() and cnt < rotation_steps:
                     self.cmd_vel_pub.publish(move_msg)
                     rate.sleep()
                     cnt = cnt + 1
@@ -172,7 +175,7 @@ class StateMachine(object):
                 self.state = 3
                 rospy.sleep(1)
 
-            # State 4: Place cube
+            # State 3: Place cube
             if self.state == 3:
 
                 # self.aruco_pose_pub.publish(self.cube_pose) # Publish the aruco pose for manip client to receive
