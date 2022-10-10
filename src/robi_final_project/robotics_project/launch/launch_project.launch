@@ -3,7 +3,7 @@
 
   <!-- ROS PARAMETERS -->
   <!-- Initial robot pose in Gazebo: change for levels A, C or E (F for demo)-->
-  <arg name="student_level"         default="F"/>
+  <arg name="student_level"         default="E"/>
 
   <!-- System level -->
   <arg name="namespace_tiago"     default="/"/>
@@ -91,6 +91,7 @@
       <param name="move_head_srv"       value="/$(arg namespace_project)/move_head_gui"/>
       <param name="amcl_estimate"       value="" />
       <param name="move_base_feedback"  value="" />
+      <param name="marker_pose_topic"   value="/marker_pose"/>
     </node>
 
     <!-- Goal robot poses for navigation -->
@@ -104,7 +105,7 @@
 
     <!-- Node exposing service to trigger the pick and place -->
     <node pkg="robotics_project" name="manipulation_client" type="manipulation_client.py" output="screen">  
-      <param name="marker_pose_topic"   value="/place_holder4"/>
+      <param name="marker_pose_topic"   value="/marker_pose"/>
       <param name="pick_srv"            value="/pick_srv_serice"/>
       <param name="place_srv"           value="/place_srv_service"/>
       <param name="move_head_srv"       value="/$(arg namespace_project)/move_head_gui"/>

@@ -10,31 +10,50 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
 		rospy.loginfo("Initialising behaviour tree")
 
-		# go to door until at door
-		b0 = pt.composites.Selector(
-			name="Go to door fallback", 
-			children=[counter(30, "At door?"), go("Go to door!", 1, 0)]
-		)
+		# # go to door until at door
+		# b0 = pt.composites.Selector(
+		# 	name="Go to door fallback", 
+		# 	children=[counter(30, "At door?"), go("Go to door!", 1, 0)]
+		# )
+		# # tuck the arm
+		# b1 = tuckarm()
 
-		# tuck the arm
-		b1 = tuckarm()
+		# # go to table
+		# b2 = pt.composites.Selector(
+		# 	name="Go to table fallback",
+		# 	children=[counter(5, "At table?"), go("Go to table!", 0, -1)]
+		# )
 
-		# go to table
+		# # move to chair
+		# b3 = pt.composites.Selector(
+		# 	name="Go to chair fallback",
+		# 	children=[counter(13, "At chair?"), go("Go to chair!", 1, 0)]
+		# )
+
+		# # lower head
+		# b4 = movehead("down")
+
+		# # become the tree
+		# tree = RSequence(name="Main sequence", children=[b0, b1, b2, b3, b4])
+
+		# b0 = detectcube()
+
+		b0 = tuckarm()
+
+		b1 = pickcube()
+
 		b2 = pt.composites.Selector(
-			name="Go to table fallback",
-			children=[counter(5, "At table?"), go("Go to table!", 0, -1)]
+			name="Back up to table",
+			children=[counter(30, "At table?"), go("Back up to table!", -1, 0)]
 		)
 
-		# move to chair
 		b3 = pt.composites.Selector(
-			name="Go to chair fallback",
-			children=[counter(13, "At chair?"), go("Go to chair!", 1, 0)]
+			name="Turn towards table",
+			children=[counter(30, "Facing table?"), go("Turn towards table!", 0, 1)]
 		)
 
-		# lower head
-		b4 = movehead("down")
+		b4 = placecube()
 
-		# become the tree
 		tree = RSequence(name="Main sequence", children=[b0, b1, b2, b3, b4])
 		super(BehaviourTree, self).__init__(tree)
 

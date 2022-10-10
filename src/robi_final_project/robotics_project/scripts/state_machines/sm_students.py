@@ -70,12 +70,12 @@ class StateMachine(object):
         self.aruco_pose_pub = rospy.Publisher(self.aruco_pose_top, PoseStamped, queue_size=1)
 
         # Set up action clients
-        rospy.loginfo("%s: Waiting for play_motion action server...", self.node_name)
-        self.play_motion_ac = SimpleActionClient("/play_motion", PlayMotionAction)
-        if not self.play_motion_ac.wait_for_server(rospy.Duration(1000)):
-            rospy.logerr("%s: Could not connect to play_motion action server", self.node_name)
-            exit()
-        rospy.loginfo("%s: Connected to play_motion action server", self.node_name)
+        # rospy.loginfo("%s: Waiting for play_motion action server...", self.node_name)
+        # self.play_motion_ac = SimpleActionClient("/play_motion", PlayMotionAction)
+        # if not self.play_motion_ac.wait_for_server(rospy.Duration(1000)):
+        #     rospy.logerr("%s: Could not connect to play_motion action server", self.node_name)
+        #     exit()
+        # rospy.loginfo("%s: Connected to play_motion action server", self.node_name)
 
         # rospy.loginfo("%s: Waiting for pickup action server...", self.node_name)
         # self.pickup_ac = SimpleActionClient("/pickup", PickupAction)
