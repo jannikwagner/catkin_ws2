@@ -36,15 +36,15 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 		# # become the tree
 		# tree = RSequence(name="Main sequence", children=[b0, b1, b2, b3, b4])
 
-		# b0 = detectcube()
-
 		b0 = tuckarm()
+
+		# b0 = detectcube()
 
 		b1 = pickcube()
 
 		b2 = pt.composites.Selector(
 			name="Back up to table",
-			children=[counter(30, "At table?"), go("Back up to table!", -1, 0)]
+			children=[counter(40, "At table?"), go("Back up to table!", -1, 0)]
 		)
 
 		b3 = pt.composites.Selector(

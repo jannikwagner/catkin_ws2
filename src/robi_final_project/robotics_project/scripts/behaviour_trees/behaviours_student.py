@@ -287,6 +287,11 @@ class placecube(pt.behaviour.Behaviour):
         # if failed
         elif not self.place_srv_req.success:
             rospy.loginfo("%s: Place failed!", self.node_name)
+
+            # #Try again if failed?
+            # rospy.loginfo("%s: Resetting tried to try placing again!", self.node_name)
+            # self.tried = False
+
             return pt.common.Status.FAILURE
 
         # if still trying
