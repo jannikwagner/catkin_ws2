@@ -38,23 +38,25 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
 		b0 = tuckarm()
 
-		# b0 = detectcube()
+		b1 = movehead("down")
+		
+		# b1 = detectcube()
 
-		b1 = pickcube()
+		b2 = pickcube()
 
-		b2 = pt.composites.Selector(
+		b3 = pt.composites.Selector(
 			name="Back up to table",
 			children=[counter(40, "At table?"), go("Back up to table!", -1, 0)]
 		)
 
-		b3 = pt.composites.Selector(
+		b4 = pt.composites.Selector(
 			name="Turn towards table",
 			children=[counter(30, "Facing table?"), go("Turn towards table!", 0, 1)]
 		)
 
-		b4 = placecube()
+		b5 = placecube()
 
-		tree = RSequence(name="Main sequence", children=[b0, b1, b2, b3, b4])
+		tree = RSequence(name="Main sequence", children=[b0, b1, b2, b3, b4, b5])
 		super(BehaviourTree, self).__init__(tree)
 
 		# execute the behaviour tree

@@ -161,9 +161,12 @@ class pickcube(pt.behaviour.Behaviour):
         # Get rosparams
         self.pick_srv_nm = rospy.get_param(rospy.get_name() + '/pick_srv')
         self.aruco_pose_top = rospy.get_param(rospy.get_name() + '/marker_pose_topic')
-        self.cube_pose_str = rospy.get_param(rospy.get_name() + '/cube_pose')
         self.robot_base_frame = rospy.get_param(rospy.get_name() + '/robot_base_frame')
+
+        # Once we detect cube, this should be adjusted to get the position from the detection
+        self.cube_pose_str = rospy.get_param(rospy.get_name() + '/cube_pose')
         self.cube_pose =  extract_cube_pose(self.cube_pose_str, self.robot_base_frame)
+        
         #rospy.loginfo("%s: cube_pose: %s", self.node_name, self.cube_pose_str)
         # cube pose = "0.50306828716, 0.0245718046511, 0.915538062216, 0.0144467629456, 0.706141958739, 0.707257659069, -0.0306827123383"
         #rospy.loginfo("%s: cube_pose: %s", self.node_name, self.cube_pose)
@@ -173,9 +176,9 @@ class pickcube(pt.behaviour.Behaviour):
         self.pick_srv = rospy.ServiceProxy(self.pick_srv_nm, SetBool)
 
         #Initialise publisher
-        self.aruco_pose_pub = rospy.Publisher(self.aruco_pose_top, PoseStamped, queue_size=1)
-
         
+        # This should be done by the detection system
+        #self.aruco_pose_pub = rospy.Publisher(self.aruco_pose_top, PoseStamped, queue_size=1)
 
         # execution checker
         self.tried = False
@@ -193,8 +196,8 @@ class pickcube(pt.behaviour.Behaviour):
         # try if not tried
         elif not self.tried:
 
-
-            self.aruco_pose_pub.publish(self.cube_pose)
+            # This should be done by the detection system
+            #self.aruco_pose_pub.publish(self.cube_pose) 
 
             # command
             request = SetBoolRequest(True)
@@ -236,24 +239,10 @@ class placecube(pt.behaviour.Behaviour):
         # Get rosparams
         self.place_srv_nm = rospy.get_param(rospy.get_name() + '/place_srv')
 
-        # Get rosparams
-        #self.pick_srv_nm = rospy.get_param(rospy.get_name() + '/pick_srv')
-        #self.aruco_pose_top = rospy.get_param(rospy.get_name() + '/marker_pose_topic')
-        #self.cube_pose_str = rospy.get_param(rospy.get_name() + '/cube_pose')
-        #self.robot_base_frame = rospy.get_param(rospy.get_name() + '/robot_base_frame')
-        #self.cube_pose =  extract_cube_pose(self.cube_pose_str, self.robot_base_frame)
-        #rospy.loginfo("%s: cube_pose: %s", self.node_name, self.cube_pose_str)
-        # cube pose = "0.50306828716, 0.0245718046511, 0.915538062216, 0.0144467629456, 0.706141958739, 0.707257659069, -0.0306827123383"
-        #rospy.loginfo("%s: cube_pose: %s", self.node_name, self.cube_pose)
 
         # Wait for servers
         rospy.wait_for_service(self.place_srv_nm, timeout=30)
         self.place_srv = rospy.ServiceProxy(self.place_srv_nm, SetBool)
-
-        #Initialise publisher
-        #self.aruco_pose_pub = rospy.Publisher(self.aruco_pose_top, PoseStamped, queue_size=1)
-
-        
 
         # execution checker
         self.tried = False
@@ -297,6 +286,81 @@ class placecube(pt.behaviour.Behaviour):
         # if still trying
         else:
             return pt.common.Status.RUNNING
+
+
+class detectcube(pt.behaviour.Behaviour):
+
+    """
+    Detects cube (and should likely publish the position somewhere for pick to acquire)
+    Returns running whilst awaiting the result,
+    success if the action was succesful, and v.v..
+    """
+
+    def __init__(self):
+
+        rospy.loginfo("Initialising detection behaviour.")
+        
+        self.node_name = "BT Student"
+
+        # Get rosparams
+        self.aruco_pose_top = rospy.get_param(rospy.get_name() + '/marker_pose_topic')
+        #self.robot_base_frame = rospy.get_param(rospy.get_name() + '/robot_base_frame')
+
+        # Wait for servers
+        
+
+        #Initialise publisher 
+        # Unsure if necessary or if we prompt the camera module to publish directly to the topic 
+        # (It is a publisher if you check 'rosnode info robotics_intro/aruco_single')
+        self.aruco_pose_pub = rospy.Publisher(self.aruco_pose_top, PoseStamped, queue_size=1)
+
+        # execution checker
+        self.tried = False
+        self.done = False
+
+        # become a behaviour
+        super(placecube, self).__init__("Place cube!")
+
+    def update(self):
+
+        # success if done
+        if self.done:
+            return pt.common.Status.SUCCESS
+
+        # try if not tried
+        elif not self.tried:
+            
+            # DETECT THE CUBE
+            self.detection_succeeded = True
+
+
+
+
+            self.tried = True
+
+            # tell the tree you're running
+            return pt.common.Status.RUNNING
+
+        # if succesful
+        elif self.detection_succeeded:
+            rospy.loginfo("%s: Detection succeeded!", self.node_name)
+            self.done = True
+            return pt.common.Status.SUCCESS
+
+        # if failed
+        elif not self.detection_succeeded:
+            rospy.loginfo("%s: Detection failed!", self.node_name)
+
+            # #Try again if failed?
+            # rospy.loginfo("%s: Resetting tried to try placing again!", self.node_name)
+            # self.tried = False
+
+            return pt.common.Status.FAILURE
+
+        # if still trying
+        else:
+            return pt.common.Status.RUNNING
+
 
 class movehead(pt.behaviour.Behaviour):
 
