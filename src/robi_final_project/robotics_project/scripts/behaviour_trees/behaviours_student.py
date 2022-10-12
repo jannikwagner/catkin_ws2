@@ -38,7 +38,6 @@ class counter(pt.behaviour.Behaviour):
         # succeed after count is done
         return pt.common.Status.FAILURE if self.i <= self.n else pt.common.Status.SUCCESS
 
-
 class go(pt.behaviour.Behaviour):
 
     """
@@ -287,14 +286,15 @@ class placecube(pt.behaviour.Behaviour):
         else:
             return pt.common.Status.RUNNING
 
-
 class detectcube(pt.behaviour.Behaviour):
 
     """
-    Detects cube (and should likely publish the position somewhere for pick to acquire)
+    Detects cube
     Returns running whilst awaiting the result,
     success if the action was succesful, and v.v..
     """
+    def aruco_pose_cb(self, aruco_pose_msg):
+        self.aruco_pose_updated = True
 
     def __init__(self):
 
@@ -304,22 +304,72 @@ class detectcube(pt.behaviour.Behaviour):
 
         # Get rosparams
         self.aruco_pose_top = rospy.get_param(rospy.get_name() + '/marker_pose_topic')
-        #self.robot_base_frame = rospy.get_param(rospy.get_name() + '/robot_base_frame')
+        
+        self.place_pose_updated = False
+        self.aruco_pose_subs = rospy.Subscriber(self.aruco_pose_top, PoseStamped, self.aruco_pose_cb)
 
-        # Wait for servers
+
+        # execution checker
+        self.done = False
+
+        # become a behaviour
+        super(detectcube, self).__init__("Detect cube!")
+
+    def update(self):
+        
+        if self.done:
+            return pt.common.Status.SUCCESS
+
+        self.place_pose_updated = False
+        rospy.loginfo("Waiting 5 seconds to see if the cube is detected")
+        rospy.sleep(5)
+        
+        if self.place_pose_updated:
+            self.done = True
+            return pt.common.Status.SUCCESS
+        
+        return pt.common.Status.FAILURE
+
         
 
-        #Initialise publisher 
-        # Unsure if necessary or if we prompt the camera module to publish directly to the topic 
-        # (It is a publisher if you check 'rosnode info robotics_intro/aruco_single')
-        self.aruco_pose_pub = rospy.Publisher(self.aruco_pose_top, PoseStamped, queue_size=1)
+
+
+# class movetopickpose(pt.behaviour.Behaviour):
+
+class movetoplacepose(pt.behaviour.Behaviour):
+
+    """
+    Dynamically travels to the published place pose
+    Returns running whilst awaiting the result,
+    success if the action was succesful, and v.v..
+    """
+    def place_pose_cb(self, place_pose_msg):
+        self.place_pose = place_pose_msg
+        self.place_pose_rcv = True
+
+    def __init__(self):
+
+        rospy.loginfo("Initialising place pose movement behaviour.")
+
+        self.node_name = "BT Student"
+
+        # Get rosparams
+        self.place_pose_top = rospy.get_param(rospy.get_name() + '/place_pose_topic')
+
+        # Set up action servers
+
+
+        # Set up subscriber
+        self.place_pose_rcv = False
+        self.place_pose_subs = rospy.Subscriber(self.place_pose_top, PoseStamped, self.place_pose_cb)
+
 
         # execution checker
         self.tried = False
         self.done = False
 
         # become a behaviour
-        super(placecube, self).__init__("Place cube!")
+        super(movetoplacepose, self).__init__("Move to place pose!")
 
     def update(self):
 
@@ -329,12 +379,15 @@ class detectcube(pt.behaviour.Behaviour):
 
         # try if not tried
         elif not self.tried:
+
+            while not rospy.is_shutdown() and self.place_pose_rcv == False:
+                rospy.loginfo("%s: Waiting for the place pose in movetoplacepose behaviour", self.node_name)
+                rospy.sleep(1.0)
             
-            # DETECT THE CUBE
-            self.detection_succeeded = True
+            # FIGURE OUT HOW TO MOVE TO self.place_pose
+            #rospy.loginfo("WE HAVE ACQUIRED THE PLACE POSE")
 
-
-
+            self.movement_success = True
 
             self.tried = True
 
@@ -342,13 +395,13 @@ class detectcube(pt.behaviour.Behaviour):
             return pt.common.Status.RUNNING
 
         # if succesful
-        elif self.detection_succeeded:
+        elif self.movement_success:
             rospy.loginfo("%s: Detection succeeded!", self.node_name)
             self.done = True
             return pt.common.Status.SUCCESS
 
         # if failed
-        elif not self.detection_succeeded:
+        elif not self.movement_success:
             rospy.loginfo("%s: Detection failed!", self.node_name)
 
             # #Try again if failed?
@@ -360,7 +413,6 @@ class detectcube(pt.behaviour.Behaviour):
         # if still trying
         else:
             return pt.common.Status.RUNNING
-
 
 class movehead(pt.behaviour.Behaviour):
 
@@ -399,6 +451,7 @@ class movehead(pt.behaviour.Behaviour):
         elif not self.tried:
 
             # command
+            rospy.loginfo("Moving head down")
             self.move_head_req = self.move_head_srv(self.direction)
             self.tried = True
 

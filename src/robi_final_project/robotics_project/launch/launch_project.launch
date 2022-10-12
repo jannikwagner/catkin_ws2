@@ -100,7 +100,7 @@
       <param name="place_pose"        value="2.6009, -1.7615, 0.0, 0.0, 0.0, 0.0, 1"/>
       <param name="pick_pose_topic"   value="/pick_pose"/>
       <param name="place_pose_topic"  value="/place_pose"/>
-      <param name="map_frame"         value="/place_holder3"/>
+      <param name="map_frame"         value="/odom"/>  <!-- Unsure if should be odom or map -->
     </node>
 
     <!-- Node exposing service to trigger the pick and place -->
