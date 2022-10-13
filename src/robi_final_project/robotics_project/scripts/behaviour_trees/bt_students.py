@@ -323,16 +323,11 @@ class placecube(pt.behaviour.Behaviour):
         elif not self.place_srv_req.success:
             rospy.loginfo("%s: Place failed!", self.node_name)
 
-            # #Try again if failed?
-            # rospy.loginfo("%s: Resetting tried to try placing again!", self.node_name)
-            # self.tried = False
-
             return pt.common.Status.FAILURE
 
         # if still trying
         else:
             return pt.common.Status.RUNNING
-
 
 class detectcube(pt.behaviour.Behaviour):
 
@@ -382,7 +377,6 @@ class detectcube(pt.behaviour.Behaviour):
         else :
             rospy.loginfo("%s: Not detected!", self.node_name)
             return pt.common.Status.FAILURE
-
 
 class movehead(pt.behaviour.Behaviour):
 
@@ -439,7 +433,6 @@ class movehead(pt.behaviour.Behaviour):
         # if still trying
         else:
             return pt.common.Status.RUNNING
-
 
 class EndBehavior(pt.behaviour.Behaviour):
 
