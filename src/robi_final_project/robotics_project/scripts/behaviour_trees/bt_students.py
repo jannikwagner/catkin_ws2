@@ -12,6 +12,7 @@ from robotics_project.srv import MoveHead, MoveHeadRequest, MoveHeadResponse
 # Added by us
 from std_srvs.srv import Empty, SetBool, SetBoolRequest  
 from geometry_msgs.msg import PoseStamped
+from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal, MoveBaseActionGoal
 
 class BehaviourTree(ptr.trees.BehaviourTree):
 
@@ -81,7 +82,10 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
 		b11 = EndBehavior()
 
+		btest = movetoplacepose()
+
 		tree = RSequence(name="Main sequence", children=[b0, b1, b2, b3, b4, b5, b10])
+		#tree = RSequence(name="Main sequence", children=[b0, btest])
 		super(BehaviourTree, self).__init__(tree)
 
 		# execute the behaviour tree
@@ -377,6 +381,67 @@ class detectcube(pt.behaviour.Behaviour):
         else :
             rospy.loginfo("%s: Not detected!", self.node_name)
             return pt.common.Status.FAILURE
+
+class movetoplacepose(pt.behaviour.Behaviour):
+
+    """
+    Detects cube (and should likely publish the position somewhere for pick to acquire)
+    Returns running whilst awaiting the result,
+    success if the action was succesful, and v.v..
+    """
+
+    def __init__(self):
+
+        rospy.loginfo("Initialising place pose movement behaviour.")
+        
+        self.node_name = "BT Student"
+
+        # become a behaviour
+        super(movetoplacepose, self).__init__("Place cube!")
+    
+    def setup(self, timeout):
+        # Get rosparams
+        # Get rosparams
+        self.place_pose_top = rospy.get_param(rospy.get_name() + '/place_pose_topic')
+
+        # Set up action servers
+        self.move_base_ac = SimpleActionClient("/move_base", MoveBaseAction)
+
+        # Set up subscriber
+        self.place_pose_rcv = False
+        self.place_pose_subs = rospy.Subscriber(self.place_pose_top, PoseStamped, self.place_pose_cb)
+        self.done = False
+        
+        return super(movetoplacepose, self).setup(timeout)
+
+    def place_pose_cb(self, place_pose_msg):
+        self.place_pose = place_pose_msg
+        self.place_pose_rcv = True
+
+    def update(self):
+        if self.done:
+            return pt.common.Status.SUCCESS
+
+        while not rospy.is_shutdown() and self.place_pose_rcv == False:
+            rospy.loginfo("%s: Waiting for the place pose in movetoplacepose behaviour", self.node_name)
+            rospy.sleep(1.0)
+
+    
+        self.goal = MoveBaseGoal()
+        self.goal.target_pose.header.frame_id = "base_link"
+        self.goal.target_pose.header.stamp = rospy.Time.now()
+        self.goal.target_pose.pose = self.place_pose
+        
+        rospy.loginfo("Sending place pose goal...")
+        self.move_base_ac.send_goal(self.goal)
+        self.move_base_ac.wait_for_result()
+        #if self.move_base_ac.
+        rospy.loginfo("Done sending place pose goal!")
+        self.done = True
+
+        return pt.common.Status.SUCCESS
+
+
 
 class movehead(pt.behaviour.Behaviour):
 
