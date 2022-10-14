@@ -45,7 +45,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
 		# # become the tree
 		# tree = RSequence(name="Main sequence", children=[b0, b1, b2, b3, b4])
-
+        
 		b0 = tuckarm()
 
 		b1 = movehead("down")
@@ -94,6 +94,28 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 		while not rospy.is_shutdown(): self.tick_tock(1)	
 
 # Behaviours
+
+class map_init(pt.behaviour.Behaviour):
+
+    """
+    Returns running for n ticks and success thereafter.
+    """
+
+    def __init__(self):
+
+        rospy.loginfo("Initialising map_init behaviour.")
+
+        # /static_map gives OccupancyGrid (supplied by /map_server node)
+        # /set_map takes an OccupancyGrid (passed to /amcl node)
+
+        
+        # become a behaviour
+        super(map_init, self).__init__("map_init")
+
+
+    def update(self):
+        pass
+
 
 class counter(pt.behaviour.Behaviour):
 
