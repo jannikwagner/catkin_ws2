@@ -50,6 +50,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
         mh_down = MoveHeadBehavior("down")
         mh_up = MoveHeadBehavior("up")
+        mh_up2 = MoveHeadBehavior("up")
 
         localize = Localize()
 
@@ -59,6 +60,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
         )
 
         navigate = Navigation()
+        navigate2 = Navigation()
 
         mtpickp = MoveToPickPose()
 
@@ -105,6 +107,8 @@ class BehaviourTree(ptr.trees.BehaviourTree):
             mtpickp,
             mh_down,
             pick_cube,
+            mh_up2,
+            navigate2,
             mtplacep,
             place_cube])
         #tree = RSequence(name="Main sequence", children=[b0, btest])
@@ -452,7 +456,10 @@ class MoveToPlacePose(pt.behaviour.Behaviour):
         # Set up subscriber
         self.place_pose_rcv = False
         self.place_pose_subs = rospy.Subscriber(self.place_pose_top, PoseStamped, self.place_pose_cb)
+
+        # execution
         self.done = False
+        self.started = False
         
         return super(MoveToPlacePose, self).setup(timeout)
 
@@ -463,17 +470,25 @@ class MoveToPlacePose(pt.behaviour.Behaviour):
     def update(self):
         if self.done:
             return pt.common.Status.SUCCESS
-
-        while not rospy.is_shutdown() and self.place_pose_rcv == False:
-            rospy.loginfo("%s: Waiting for the place pose in movetoplacepose behaviour", self.node_name)
-            rospy.sleep(1.0)
-
-        mbgoal = MoveBaseGoal(target_pose=self.place_pose)
         
-        rospy.loginfo("Sending place pose goal...")
-        self.move_base_ac.send_goal(mbgoal)
-        self.move_base_ac.wait_for_result()
-        #if self.move_base_ac.
+        if not self.started:
+            if not rospy.is_shutdown() and not self.place_pose_rcv:
+                rospy.loginfo("%s: Waiting for the place pose in movetoplacepose behaviour", self.node_name)
+                return pt.common.Status.RUNNING
+
+            mbgoal = MoveBaseGoal(target_pose=self.place_pose)
+            
+            rospy.loginfo("Sending place pose goal...")
+            self.move_base_ac.send_goal(mbgoal)
+            self.started = True
+            return pt.common.Status.RUNNING
+        
+        if not self.move_base_ac.get_result():
+            return pt.common.Status.RUNNING
+        
+        # self.move_base_ac.wait_for_result()
+        # if self.move_base_ac.
+
         rospy.loginfo("Done sending place pose goal!")
         self.done = True
 
