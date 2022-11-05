@@ -16,82 +16,91 @@ from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal, MoveBaseActionGoal
 
 class BehaviourTree(ptr.trees.BehaviourTree):
 
-	def __init__(self):
+    def __init__(self):
 
-		rospy.loginfo("Initialising behaviour tree")
+        rospy.loginfo("Initialising behaviour tree")
 
-		# # go to door until at door
-		# b0 = pt.composites.Selector(
-		# 	name="Go to door fallback", 
-		# 	children=[counter(30, "At door?"), go("Go to door!", 1, 0)]
-		# )
-		# # tuck the arm
-		# b1 = tuckarm()
+        # # go to door until at door
+        # b0 = pt.composites.Selector(
+        #   name="Go to door fallback", 
+        #   children=[counter(30, "At door?"), go("Go to door!", 1, 0)]
+        # )
+        # # tuck the arm
+        # b1 = tuckarm()
 
-		# # go to table
-		# b2 = pt.composites.Selector(
-		# 	name="Go to table fallback",
-		# 	children=[counter(5, "At table?"), go("Go to table!", 0, -1)]
-		# )
+        # # go to table
+        # b2 = pt.composites.Selector(
+        #   name="Go to table fallback",
+        #   children=[counter(5, "At table?"), go("Go to table!", 0, -1)]
+        # )
 
-		# # move to chair
-		# b3 = pt.composites.Selector(
-		# 	name="Go to chair fallback",
-		# 	children=[counter(13, "At chair?"), go("Go to chair!", 1, 0)]
-		# )
+        # # move to chair
+        # b3 = pt.composites.Selector(
+        #   name="Go to chair fallback",
+        #   children=[counter(13, "At chair?"), go("Go to chair!", 1, 0)]
+        # )
 
-		# # lower head
-		# b4 = movehead("down")
+        # # lower head
+        # b4 = movehead("down")
 
-		# # become the tree
-		# tree = RSequence(name="Main sequence", children=[b0, b1, b2, b3, b4])
+        # # become the tree
+        # tree = RSequence(name="Main sequence", children=[b0, b1, b2, b3, b4])
         
-		b0 = tuckarm()
+        b0 = tuckarm()
 
-		b1 = movehead("down")
+        # b1 = movehead("down")
+        b1 = movehead("up")
 
-		b2 = pickcube()
+        localize = Localize()
 
-		b3 = pt.composites.Selector(
-			name="Back up to table",
-			children=[counter(40, "At table?"), go("Back up to table!", -1, 0)]
-		)
+        rotate = pt.composites.Selector(
+            name="Rotate",
+            children=[counter(30, "Rotated?"), go("Rotate!", 0, 1)]
+        )
 
-		b4 = pt.composites.Selector(
-			name="Turn towards table",
-			children=[counter(30, "Facing table?"), go("Turn towards table!", 0, 1)]
-		)
 
-		b5 = placecube()
+        b2 = pickcube()
 
-		b6 = detectcube()
+        b3 = pt.composites.Selector(
+            name="Back up to table",
+            children=[counter(40, "At table?"), go("Back up to table!", -1, 0)]
+        )
 
-		b7 = pt.composites.Selector(
-			name="Back up to table",
-			children=[counter(40, "At table?"), go("Back up to table!", -1, 0)]
-		)
+        b4 = pt.composites.Selector(
+            name="Turn towards table",
+            children=[counter(30, "Facing table?"), go("Turn towards table!", 0, 1)]
+        )
 
-		b8 = pt.composites.Selector(
-			name="Turn towards table",
-			children=[counter(30, "Facing table?"), go("Turn towards table!", 0, 1)]
-		)
+        b5 = placecube()
 
-		b9 = RSequence(name="Move back", children=[b7, b8])
+        b6 = detectcube()
 
-		b10 = pt.composites.Selector(name="Coditional Reset", children=[b6, b9])
+        b7 = pt.composites.Selector(
+            name="Back up to table",
+            children=[counter(40, "At table?"), go("Back up to table!", -1, 0)]
+        )
 
-		b11 = EndBehavior()
+        b8 = pt.composites.Selector(
+            name="Turn towards table",
+            children=[counter(30, "Facing table?"), go("Turn towards table!", 0, 1)]
+        )
 
-		btest = movetoplacepose()
+        b9 = RSequence(name="Move back", children=[b7, b8])
 
-		tree = RSequence(name="Main sequence", children=[b0, b1, b2, b3, b4, b5, b10])
-		#tree = RSequence(name="Main sequence", children=[b0, btest])
-		super(BehaviourTree, self).__init__(tree)
+        b10 = pt.composites.Selector(name="Coditional Reset", children=[b6, b9])
 
-		# execute the behaviour tree
-		rospy.sleep(5)
-		self.setup(timeout=10000)
-		while not rospy.is_shutdown(): self.tick_tock(1)	
+        b11 = EndBehavior()
+
+        btest = movetoplacepose()
+
+        tree = RSequence(name="Main sequence", children=[b0, b1, localize, rotate, b2, b3, b4, b5, b10])
+        #tree = RSequence(name="Main sequence", children=[b0, btest])
+        super(BehaviourTree, self).__init__(tree)
+
+        # execute the behaviour tree
+        rospy.sleep(5)
+        self.setup(timeout=10000)
+        while not rospy.is_shutdown(): self.tick_tock(1)    
 
 # Behaviours
 
@@ -154,8 +163,8 @@ class go(pt.behaviour.Behaviour):
         rospy.loginfo("Initialising go behaviour.")
 
         # action space
-        #self.cmd_vel_top = rospy.get_param(rospy.get_name() + '/cmd_vel_topic')
-        self.cmd_vel_top = "/key_vel"
+        self.cmd_vel_top = rospy.get_param(rospy.get_name() + '/cmd_vel_topic')
+        # self.cmd_vel_top = "/key_vel"
         #rospy.loginfo(self.cmd_vel_top)
         self.cmd_vel_pub = rospy.Publisher(self.cmd_vel_top, Twist, queue_size=10)
 
@@ -370,7 +379,7 @@ class detectcube(pt.behaviour.Behaviour):
         self.node_name = "BT Student"
 
         # become a behaviour
-        super(detectcube, self).__init__("Place cube!")
+        super(detectcube, self).__init__("Detect cube!")
 
     def detect_cb(self, *args):
         # if position is published, it is detected
@@ -502,19 +511,19 @@ class movehead(pt.behaviour.Behaviour):
         elif not self.tried:
 
             # command
-            self.move_head_req = self.move_head_srv(self.direction)
+            self.req = self.move_head_srv(self.direction)
             self.tried = True
 
             # tell the tree you're running
             return pt.common.Status.RUNNING
 
         # if succesful
-        elif self.move_head_req.success:
+        elif self.req.success:
             self.done = True
             return pt.common.Status.SUCCESS
 
         # if failed
-        elif not self.move_head_req.success:
+        elif not self.req.success:
             return pt.common.Status.FAILURE
 
         # if still trying
@@ -535,13 +544,60 @@ class EndBehavior(pt.behaviour.Behaviour):
         sys.exit()
         return pt.common.Status.RUNNING
 
+class Localize(pt.behaviour.Behaviour):
+
+    """
+    TODO
+    """
+
+    def __init__(self):
+
+        rospy.loginfo("Initialising localization behaviour.")
+        
+        self.node_name = "BT Student"
+
+        # become a behaviour
+        super(Localize, self).__init__("Localize!")
+
+    def setup(self, timeout):
+        # Get rosparams
+        self.service_name = rospy.get_param(rospy.get_name() + '/global_loc_srv')
+
+        # Wait for servers
+        rospy.wait_for_service(self.service_name, timeout=30)
+        self.service = rospy.ServiceProxy(self.service_name, Empty)
+
+        # execution checker
+        self.done = False
+        
+        return super(Localize, self).setup(timeout)
+
+    def initialise(self):
+        return super(Localize, self).initialise()
+    
+    def update(self):
+        if self.done:
+            return pt.common.Status.SUCCESS
+        
+        # try if not tried
+        elif not self.done:
+
+            # command
+            self.req = self.service()
+            rospy.loginfo("localization service return: %s", self.req)
+            self.done = True
+
+            # tell the tree you're running
+            return pt.common.Status.RUNNING
+
+
 if __name__ == "__main__":
 
-	rospy.init_node('main_state_machine')
-	try:
-		BehaviourTree()
-	except rospy.ROSInterruptException:
-		pass
+    rospy.init_node('main_state_machine')
+    try:
+        BehaviourTree()
+    except rospy.ROSInterruptException:
+        pass
 
-	rospy.spin()
+    rospy.spin()
 
