@@ -59,10 +59,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
             children=[counter(60, "Rotated?"), go("Rotate!", 0, 1)]
         )
 
-        navigate = Navigation()
-        navigate2 = Navigation()
-
-        mtpickp = MoveToPickPose()
+        mtpickp = Navigation("pick")
 
         pick_cube = PickCube()
 
@@ -76,7 +73,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
         #     children=[counter(30, "Facing table?"), go("Turn towards table!", 0, 1)]
         # )
 
-        mtplacep = MoveToPlacePose()
+        mtplacep = Navigation("place")
 
         place_cube = PlaceCube()
 
@@ -103,12 +100,10 @@ class BehaviourTree(ptr.trees.BehaviourTree):
             mh_up,
             localize,
             rotate,
-            navigate,
             mtpickp,
             mh_down,
             pick_cube,
             mh_up2,
-            navigate2,
             mtplacep,
             place_cube])
         #tree = RSequence(name="Main sequence", children=[b0, btest])
@@ -430,55 +425,70 @@ class DetectCube(pt.behaviour.Behaviour):
             rospy.loginfo("%s: Not detected!", self.node_name)
             return pt.common.Status.FAILURE
 
-class MoveToPlacePose(pt.behaviour.Behaviour):
+class Navigation(pt.behaviour.Behaviour):
 
     """
     TODO
     """
 
-    def __init__(self):
+    def __init__(self, to="pick"):
 
-        rospy.loginfo("Initialising place pose movement behaviour.")
+        rospy.loginfo("Initialising Navigation to %s.", to)
+
+        PLACE_POSE_TOPIC_PARAM = '/place_pose_topic'
+        PICK_POSE_TOPIC_PARAM = '/pick_pose_topic'
+        self.mapping = {"place": PLACE_POSE_TOPIC_PARAM, "pick": PICK_POSE_TOPIC_PARAM}
+        assert to in self.mapping
+
+        self.to = to
+        self.param_name = self.mapping[to]
         
         self.node_name = "BT Student"
 
         # become a behaviour
-        super(MoveToPlacePose, self).__init__("Place cube!")
+        super(Navigation, self).__init__("Place cube!")
     
     def setup(self, timeout):
         # Get rosparams
-        # Get rosparams
-        self.place_pose_top = rospy.get_param(rospy.get_name() + '/place_pose_topic')
+        self.pose_top = rospy.get_param(rospy.get_name() + self.param_name)
+        self.clear_costmap_srv_nm = rospy.get_param(rospy.get_name() + '/clear_costmaps_srv')
 
         # Set up action servers
         self.move_base_ac = SimpleActionClient("/move_base", MoveBaseAction)
 
         # Set up subscriber
-        self.place_pose_rcv = False
-        self.place_pose_subs = rospy.Subscriber(self.place_pose_top, PoseStamped, self.place_pose_cb)
+        self.pose_rcv = False
+        self.pose_subs = rospy.Subscriber(self.pose_top, PoseStamped, self.pose_cb)
+
+        # Get rosparams
+        # Wait for servers
+        rospy.wait_for_service(self.clear_costmap_srv_nm, timeout=30)
+        self.clear_costmap = rospy.ServiceProxy(self.clear_costmap_srv_nm, Empty)
 
         # execution
         self.done = False
         self.started = False
         
-        return super(MoveToPlacePose, self).setup(timeout)
+        return super(Navigation, self).setup(timeout)
 
-    def place_pose_cb(self, place_pose_msg):
-        self.place_pose = place_pose_msg
-        self.place_pose_rcv = True
+    def pose_cb(self, pose_msg):
+        self.pose = pose_msg
+        self.pose_rcv = True
 
     def update(self):
         if self.done:
             return pt.common.Status.SUCCESS
         
         if not self.started:
-            if not rospy.is_shutdown() and not self.place_pose_rcv:
-                rospy.loginfo("%s: Waiting for the place pose in movetoplacepose behaviour", self.node_name)
+            if not rospy.is_shutdown() and not self.pose_rcv:
+                rospy.loginfo("%s: Waiting for the %s pose in movetoplacepose behaviour", self.node_name, self.to)
                 return pt.common.Status.RUNNING
-
-            mbgoal = MoveBaseGoal(target_pose=self.place_pose)
             
-            rospy.loginfo("Sending place pose goal...")
+            self.clear_costmap()
+
+            mbgoal = MoveBaseGoal(target_pose=self.pose)
+            
+            rospy.loginfo("Sending %s pose goal...", self.to)
             self.move_base_ac.send_goal(mbgoal)
             self.started = True
             return pt.common.Status.RUNNING
@@ -493,60 +503,6 @@ class MoveToPlacePose(pt.behaviour.Behaviour):
         self.done = True
 
         return pt.common.Status.SUCCESS
-
-class MoveToPickPose(pt.behaviour.Behaviour):
-
-    """
-    TODO
-    """
-
-    def __init__(self):
-
-        rospy.loginfo("Initialising place pose movement behaviour.")
-        
-        self.node_name = "BT Student"
-
-        # become a behaviour
-        super(MoveToPickPose, self).__init__("Place cube!")
-    
-    def setup(self, timeout):
-        # Get rosparams
-        # Get rosparams
-        self.pick_pose_top = rospy.get_param(rospy.get_name() + '/pick_pose_topic')
-
-        # Set up action servers
-        self.move_base_ac = SimpleActionClient("/move_base", MoveBaseAction)
-
-        # Set up subscriber
-        self.pick_pose_rcv = False
-        self.pick_pose_subs = rospy.Subscriber(self.pick_pose_top, PoseStamped, self.pick_pose_cb)
-        self.done = False
-        
-        return super(MoveToPickPose, self).setup(timeout)
-
-    def pick_pose_cb(self, pick_pose_msg):
-        self.pick_pose = pick_pose_msg
-        self.pick_pose_rcv = True
-
-    def update(self):
-        if self.done:
-            return pt.common.Status.SUCCESS
-
-        while not rospy.is_shutdown() and self.pick_pose_rcv == False:
-            rospy.loginfo("%s: Waiting for the place pose in movetoplacepose behaviour", self.node_name)
-            rospy.sleep(1.0)
-    
-        mbgoal = MoveBaseGoal(target_pose=self.pick_pose)
-        
-        rospy.loginfo("Sending place pose goal...")
-        self.move_base_ac.send_goal(mbgoal)
-        self.move_base_ac.wait_for_result()
-        #if self.move_base_ac.
-        rospy.loginfo("Done sending place pose goal!")
-        self.done = True
-
-        return pt.common.Status.SUCCESS
-
 
 
 class MoveHeadBehavior(pt.behaviour.Behaviour):
@@ -649,51 +605,6 @@ class Localize(pt.behaviour.Behaviour):
 
     def initialise(self):
         return super(Localize, self).initialise()
-    
-    def update(self):
-        if self.done:
-            return pt.common.Status.SUCCESS
-        
-        # try if not tried
-        elif not self.done:
-
-            # command
-            self.req = self.service()
-            self.done = True
-
-            # tell the tree you're running
-            return pt.common.Status.RUNNING
-
-class Navigation(pt.behaviour.Behaviour):
-
-    """
-    TODO
-    """
-
-    def __init__(self):
-
-        rospy.loginfo("Initialising Navigation behaviour.")
-        
-        self.node_name = "BT Student"
-
-        # become a behaviour
-        super(Navigation, self).__init__("Navigate!")
-
-    def setup(self, timeout):
-        # Get rosparams
-        self.service_name = rospy.get_param(rospy.get_name() + '/clear_costmaps_srv')
-
-        # Wait for servers
-        rospy.wait_for_service(self.service_name, timeout=30)
-        self.service = rospy.ServiceProxy(self.service_name, Empty)
-
-        # execution checker
-        self.done = False
-        
-        return super(Navigation, self).setup(timeout)
-
-    def initialise(self):
-        return super(Navigation, self).initialise()
     
     def update(self):
         if self.done:
