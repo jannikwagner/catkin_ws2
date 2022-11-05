@@ -76,11 +76,11 @@
   <group ns="$(arg namespace_project)">
     <!-- Mission planner -->
     <node pkg="robotics_project" type="bt_students.py" name="logic_behaviour_tree" output="screen">
-      <param name="global_loc_srv"      value="/global_localization"/> <!-- Educated guess -->
+      <param name="global_loc_srv"      value="/global_localization"/>
       <param name="clear_costmaps_srv"  value="/move_base/clear_costmaps"/> <!-- Educated guess -->
       <param name="pick_srv"            value="/pick_srv_serice"/>
       <param name="place_srv"           value="/place_srv_service"/>
-      <param name="nav_goal_topic"      value=""/>
+      <param name="nav_goal_topic"      value="/move_base/current_goal/"/> <!-- Educated guess, or move_base_simple/goal or pick_pose -->
       <param name="cmd_vel_topic"       value="/key_vel"/>
       <param name="move_base_frame"     value=""/>
       <param name="pick_pose_topic"     value="/pick_pose"/>
