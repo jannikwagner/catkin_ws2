@@ -46,10 +46,10 @@ class BehaviourTree(ptr.trees.BehaviourTree):
         # # become the tree
         # tree = RSequence(name="Main sequence", children=[b0, b1, b2, b3, b4])
         
-        b0 = tuckarm()
+        tuck_arm = TuckArm()
 
-        mh_down = movehead("down")
-        mh_up = movehead("up")
+        mh_down = MoveHeadBehavior("down")
+        mh_up = MoveHeadBehavior("up")
 
         localize = Localize()
 
@@ -62,7 +62,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
         mtpickp = MoveToPickPose()
 
-        b2 = pickcube()
+        pick_cube = PickCube()
 
         # b3 = pt.composites.Selector(
         #     name="Back up to table",
@@ -76,27 +76,37 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
         mtplacep = MoveToPlacePose()
 
-        b5 = placecube()
+        place_cube = PlaceCube()
 
-        b6 = detectcube()
+        detect_cube = DetectCube()
 
-        b7 = pt.composites.Selector(
+        go_back = pt.composites.Selector(
             name="Back up to table",
             children=[counter(40, "At table?"), go("Back up to table!", -1, 0)]
         )
 
-        b8 = pt.composites.Selector(
+        rotate_back = pt.composites.Selector(
             name="Turn towards table",
             children=[counter(30, "Facing table?"), go("Turn towards table!", 0, 1)]
         )
 
-        b9 = RSequence(name="Move back", children=[b7, b8])
+        back_to_table = RSequence(name="Move back", children=[go_back, rotate_back])
 
-        b10 = pt.composites.Selector(name="Coditional Reset", children=[b6, b9])
+        conditional_reset = pt.composites.Selector(name="Coditional Reset", children=[detect_cube, back_to_table])
 
-        b11 = EndBehavior()
+        end_behavior = EndBehavior()
 
-        tree = RSequence(name="Main sequence", children=[b0, mh_up, localize, rotate, navigate, mtpickp, b2, mtplacep, b5])
+        tree = RSequence(name="Main sequence", children=[
+            tuck_arm,
+            mh_up,
+            localize,
+            rotate,
+            navigate,
+            mtpickp,
+            mh_down,
+            pick_cube,
+            mtplacep,
+            place_cube])
         #tree = RSequence(name="Main sequence", children=[b0, btest])
         super(BehaviourTree, self).__init__(tree)
 
@@ -189,7 +199,7 @@ class go(pt.behaviour.Behaviour):
         # tell the tree that you're running
         return pt.common.Status.RUNNING
 
-class tuckarm(pt.behaviour.Behaviour):
+class TuckArm(pt.behaviour.Behaviour):
 
     """
     Sends a goal to the tuck arm action server.
@@ -214,7 +224,7 @@ class tuckarm(pt.behaviour.Behaviour):
         self.finished = False
 
         # become a behaviour
-        super(tuckarm, self).__init__("Tuck arm!")
+        super(TuckArm, self).__init__("Tuck arm!")
 
     def update(self):
         # already tucked the arm
@@ -246,7 +256,7 @@ class tuckarm(pt.behaviour.Behaviour):
         else:
             return pt.common.Status.RUNNING
 
-class pickcube(pt.behaviour.Behaviour):
+class PickCube(pt.behaviour.Behaviour):
 
     """
     Picks up cube from known position
@@ -272,7 +282,7 @@ class pickcube(pt.behaviour.Behaviour):
         self.done = False
 
         # become a behaviour
-        super(pickcube, self).__init__("Pick cube!")
+        super(PickCube, self).__init__("Pick cube!")
 
     def update(self):
 
@@ -306,7 +316,7 @@ class pickcube(pt.behaviour.Behaviour):
         else:
             return pt.common.Status.RUNNING
 
-class placecube(pt.behaviour.Behaviour):
+class PlaceCube(pt.behaviour.Behaviour):
 
     """
     Places cube
@@ -333,7 +343,7 @@ class placecube(pt.behaviour.Behaviour):
         self.done = False
 
         # become a behaviour
-        super(placecube, self).__init__("Place cube!")
+        super(PlaceCube, self).__init__("Place cube!")
 
     def update(self):
 
@@ -367,7 +377,7 @@ class placecube(pt.behaviour.Behaviour):
         else:
             return pt.common.Status.RUNNING
 
-class detectcube(pt.behaviour.Behaviour):
+class DetectCube(pt.behaviour.Behaviour):
 
     """
     Detects cube (and should likely publish the position somewhere for pick to acquire)
@@ -382,7 +392,7 @@ class detectcube(pt.behaviour.Behaviour):
         self.node_name = "BT Student"
 
         # become a behaviour
-        super(detectcube, self).__init__("Detect cube!")
+        super(DetectCube, self).__init__("Detect cube!")
 
     def detect_cb(self, *args):
         # if position is published, it is detected
@@ -394,7 +404,7 @@ class detectcube(pt.behaviour.Behaviour):
         self.aruco_pose_top = rospy.get_param(rospy.get_name() + '/marker_pose_topic')
         self.done = False
         
-        return super(detectcube, self).setup(timeout)
+        return super(DetectCube, self).setup(timeout)
     
     def update(self):
         if self.done:
@@ -524,10 +534,10 @@ class MoveToPickPose(pt.behaviour.Behaviour):
 
 
 
-class movehead(pt.behaviour.Behaviour):
+class MoveHeadBehavior(pt.behaviour.Behaviour):
 
     """
-    Lowers or raisesthe head of the robot.
+    Lowers or raises the head of the robot.
     Returns running whilst awaiting the result,
     success if the action was succesful, and v.v..
     """
@@ -549,7 +559,7 @@ class movehead(pt.behaviour.Behaviour):
         self.done = False
 
         # become a behaviour
-        super(movehead, self).__init__("Lower head!")
+        super(MoveHeadBehavior, self).__init__("Move head!")
 
     def update(self):
 
