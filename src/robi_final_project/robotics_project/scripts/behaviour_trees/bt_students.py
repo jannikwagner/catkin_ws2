@@ -33,7 +33,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
         rotate = pt.composites.Selector(
             name="Rotate",
-            children=[counter(60, "Rotated?"), go("Rotate!", 0, 1)]
+            children=[counter(60, "Rotated?"), Go("Rotate!", 0, 1)]
         )
 
         mtpickp = Navigation(pose)
@@ -44,7 +44,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
         rotate2 = pt.composites.Selector(
             name="Rotate",
-            children=[counter(60, "Rotated?"), go("Rotate!", 0, 1)]
+            children=[counter(60, "Rotated?"), Go("Rotate!", 0, 1)]
         )
 
         mtplacep = Navigation("place")
@@ -92,28 +92,6 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
 # Behaviours
 
-class map_init(pt.behaviour.Behaviour):
-
-    """
-    Returns running for n ticks and success thereafter.
-    """
-
-    def __init__(self):
-
-        rospy.loginfo("Initialising map_init behaviour.")
-
-        # /static_map gives OccupancyGrid (supplied by /map_server node)
-        # /set_map takes an OccupancyGrid (passed to /amcl node)
-
-        
-        # become a behaviour
-        super(map_init, self).__init__("map_init")
-
-
-    def update(self):
-        pass
-
-
 class counter(pt.behaviour.Behaviour):
 
     """
@@ -125,11 +103,14 @@ class counter(pt.behaviour.Behaviour):
         rospy.loginfo("Initialising counter behaviour.")
 
         # counter
-        self.i = 0
+        self.reset()
         self.n = n
 
         # become a behaviour
         super(counter, self).__init__(name)
+    
+    def reset(self):
+        self.i = 0
 
     def update(self):
 
@@ -140,7 +121,7 @@ class counter(pt.behaviour.Behaviour):
         return pt.common.Status.FAILURE if self.i <= self.n else pt.common.Status.SUCCESS
 
 
-class go(pt.behaviour.Behaviour):
+class Go(pt.behaviour.Behaviour):
 
     """
     Returns running and commands a velocity indefinitely.
@@ -150,19 +131,24 @@ class go(pt.behaviour.Behaviour):
 
         rospy.loginfo("Initialising go behaviour.")
 
+        self.linear = linear
+        self.angular = angular
+
+        # become a behaviour
+        super(Go, self).__init__(name)
+
+    def setup(self, timeout):
         # action space
         self.cmd_vel_top = rospy.get_param(rospy.get_name() + '/cmd_vel_topic')
-        # self.cmd_vel_top = "/key_vel"
-        #rospy.loginfo(self.cmd_vel_top)
+
+        # init pub
         self.cmd_vel_pub = rospy.Publisher(self.cmd_vel_top, Twist, queue_size=10)
 
         # command
         self.move_msg = Twist()
-        self.move_msg.linear.x = linear
-        self.move_msg.angular.z = angular
-
-        # become a behaviour
-        super(go, self).__init__(name)
+        self.move_msg.linear.x = self.linear
+        self.move_msg.angular.z = self.angular
+        return super(Go, self).setup(timeout)
 
     def update(self):
 
@@ -195,11 +181,14 @@ class TuckArm(pt.behaviour.Behaviour):
         self.goal.skip_planning = True
 
         # execution checker
-        self.sent_goal = False
-        self.finished = False
+        self.reset()
 
         # become a behaviour
         super(TuckArm, self).__init__("Tuck arm!")
+    
+    def reset(self):
+        self.sent_goal = False
+        self.finished = False
 
     def update(self):
         # already tucked the arm
@@ -231,6 +220,64 @@ class TuckArm(pt.behaviour.Behaviour):
         else:
             return pt.common.Status.RUNNING
 
+
+class TuckArm2(pt.behaviour.Behaviour):
+
+    """
+    Sends a goal to the tuck arm action server.
+    Returns running whilst awaiting the result,
+    success if the action was succesful, and v.v..
+    """
+
+    def __init__(self):
+
+        rospy.loginfo("Initialising tuck arm behaviour.")
+
+        # Set up action client
+        self.play_motion_ac = SimpleActionClient("/play_motion", PlayMotionAction)
+
+        # personal goal setting
+        self.goal = PlayMotionGoal()
+        self.goal.motion_name = 'home'
+        self.goal.skip_planning = True
+
+        # execution checker
+        self.reset()
+
+        # become a behaviour
+        super(TuckArm2, self).__init__("Tuck arm!")
+    
+    def reset(self):
+        self.sent_goal = False
+        self.finished = False
+
+    def update(self):
+        # already tucked the arm
+        if self.finished: 
+            return pt.common.Status.SUCCESS
+        
+        # command to tuck arm if haven't already
+        elif not self.sent_goal:
+
+            # send the goal
+            self.play_motion_ac.send_goal(self.goal)
+            self.sent_goal = True
+
+            # tell the tree you're running
+            return pt.common.Status.RUNNING
+
+        # if still trying
+        elif not self.play_motion_ac.get_result():
+            return pt.common.Status.RUNNING
+
+        # if I was succesful! :)))))))))
+        elif self.play_motion_ac.get_result():
+
+            # than I'm finished!
+            self.finished = True
+            return pt.common.Status.SUCCESS
+
+
 class PickCube(pt.behaviour.Behaviour):
 
     """
@@ -253,11 +300,14 @@ class PickCube(pt.behaviour.Behaviour):
         self.pick_srv = rospy.ServiceProxy(self.pick_srv_nm, SetBool)
 
         # execution checker
-        self.tried = False
-        self.done = False
+        self.reset()
 
         # become a behaviour
         super(PickCube, self).__init__("Pick cube!")
+
+    def reset(self):
+        self.tried = False
+        self.done = False
 
     def update(self):
 
@@ -287,8 +337,9 @@ class PickCube(pt.behaviour.Behaviour):
         elif not self.pick_srv_req.success:
             return pt.common.Status.FAILURE
 
-        # if still trying
+        # if still trying - should never be the case
         else:
+            raise Exception("COWABUNGA")
             return pt.common.Status.RUNNING
 
 class PlaceCube(pt.behaviour.Behaviour):
@@ -314,11 +365,14 @@ class PlaceCube(pt.behaviour.Behaviour):
         self.place_srv = rospy.ServiceProxy(self.place_srv_nm, SetBool)
 
         # execution checker
-        self.tried = False
-        self.done = False
+        self.reset()
 
         # become a behaviour
         super(PlaceCube, self).__init__("Place cube!")
+
+    def reset(self):
+        self.tried = False
+        self.done = False
 
     def update(self):
 
@@ -348,8 +402,9 @@ class PlaceCube(pt.behaviour.Behaviour):
 
             return pt.common.Status.FAILURE
 
-        # if still trying
+        # if still trying - should never be the case
         else:
+            raise Exception("COWABUNGA")
             return pt.common.Status.RUNNING
 
 class DetectCube(pt.behaviour.Behaviour):
@@ -371,19 +426,23 @@ class DetectCube(pt.behaviour.Behaviour):
 
     def detect_cb(self, *args):
         # if position is published, it is detected
-        # rospy.loginfo("detect callback")
+        rospy.loginfo("detect callback")
         self.detected = True
     
     def setup(self, timeout):
         # Get rosparams
         self.aruco_pose_top = rospy.get_param(rospy.get_name() + '/marker_pose_topic')
-        self.done = False
+        self.reset()
         
         return super(DetectCube, self).setup(timeout)
+
+    def reset(self):
+        self.done = False
+        self.detection_outcome = False
     
     def update(self):
         if self.done:
-            if self.detected:
+            if self.detection_outcome:
                 return pt.common.Status.SUCCESS
             else :
                 return pt.common.Status.FAILURE
@@ -394,6 +453,7 @@ class DetectCube(pt.behaviour.Behaviour):
         self.aruco_pose_sub.unregister()
         self.done = True
         if self.detected:
+            self.detection_outcome = True
             rospy.loginfo("%s: Detected!", self.node_name)
             return pt.common.Status.SUCCESS
 
@@ -432,14 +492,17 @@ class Navigation(pt.behaviour.Behaviour):
         self.move_base_ac = SimpleActionClient("/move_base", MoveBaseAction)
 
         # Set up subscriber
-        self.pose_rcv = False
         self.pose_subs = rospy.Subscriber(self.pose_top, PoseStamped, self.pose_cb)
 
         # execution
+        self.reset()
+
+        return super(Navigation, self).setup(timeout)
+
+    def reset(self):
         self.done = False
         self.started = False
-        
-        return super(Navigation, self).setup(timeout)
+        self.pose_rcv = False
 
     def pose_cb(self, pose_msg):
         self.pose = pose_msg
@@ -494,11 +557,14 @@ class MoveHeadBehavior(pt.behaviour.Behaviour):
         self.direction = direction
 
         # execution checker
-        self.tried = False
-        self.done = False
+        self.reset()
 
         # become a behaviour
         super(MoveHeadBehavior, self).__init__("Move head!")
+
+    def reset(self):
+        self.tried = False
+        self.done = False
 
     def update(self):
 
@@ -567,11 +633,24 @@ class GenerateParticles(pt.behaviour.Behaviour):
         self.particle_service = rospy.ServiceProxy(self.particle_service_name, Empty)
 
         # execution checker
-        self.done = False
+        self.reset()
         
         return super(GenerateParticles, self).setup(timeout)
 
+    def reset(self):
+        self.done = False
+
     def initialise(self):
+        """
+        When is this called?
+          The first time your behaviour is ticked and anytime the
+          status is not RUNNING thereafter.
+
+        What to do here?
+          Any initialisation you need before putting your behaviour
+          to work.
+        """
+        # rospy.loginfo("  %s [GenerateParticles::initialise()]" % self.name)
         return super(GenerateParticles, self).initialise()
     
     def update(self):
@@ -582,7 +661,7 @@ class GenerateParticles(pt.behaviour.Behaviour):
         elif not self.done:
 
             # command
-            self.req = self.particle_service()
+            self.particle_service()
             self.done = True
 
             # tell the tree you're running
@@ -612,9 +691,12 @@ class ClearCostmaps(pt.behaviour.Behaviour):
         self.clear_costmap = rospy.ServiceProxy(self.clear_costmap_srv_nm, Empty)
 
         # execution checker
-        self.done = False
+        self.reset()
         
         return super(ClearCostmaps, self).setup(timeout)
+
+    def reset(self):
+        self.done = False
 
     def initialise(self):
         return super(ClearCostmaps, self).initialise()
@@ -627,7 +709,7 @@ class ClearCostmaps(pt.behaviour.Behaviour):
         elif not self.done:
 
             # command
-            self.req = self.clear_costmap()
+            self.clear_costmap()
             self.done = True
 
             # tell the tree you're running
