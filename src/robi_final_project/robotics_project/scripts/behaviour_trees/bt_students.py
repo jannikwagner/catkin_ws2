@@ -11,8 +11,10 @@ from robotics_project.srv import MoveHead, MoveHeadRequest, MoveHeadResponse
 
 # Added by us
 from std_srvs.srv import Empty, SetBool, SetBoolRequest  
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal, MoveBaseActionGoal
+
+import numpy as np
 
 class BehaviourTree(ptr.trees.BehaviourTree):
 
@@ -76,9 +78,12 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
         conditional_reset = pt.composites.Selector(name="Coditional Reset", children=[detect_cube, reset_from_2])
 
+        kidnap_check = NotKidnapped()
+
         end_behavior = EndBehavior()
 
         tree = RSequence(name="Main sequence", children=[
+            kidnap_check,
             tuck_arm,
             mh_up,
             generate_particles,
@@ -761,6 +766,57 @@ class ResetBehavior(pt.behaviour.Behaviour):
 
         # tell the tree you're running
         return pt.common.Status.RUNNING
+
+class NotKidnapped(pt.behaviour.Behaviour):
+    """
+    Reset
+    """
+
+    def __init__(self):
+
+        rospy.loginfo("Initialising NotKidnapped behaviour.")
+        
+        self.node_name = "BT Student"
+
+        # become a behaviour
+        super(NotKidnapped, self).__init__("NotKidnapped!")
+
+    def setup(self, timeout):
+        # Get rosparams
+        self.estimate_top = rospy.get_param(rospy.get_name() + "/amcl_estimate")
+
+        # Set up subscriber
+        self.estimate_subs = rospy.Subscriber(self.estimate_top, PoseWithCovarianceStamped, self.pose_cb)
+        self.pose_rcv = False
+
+        return super(NotKidnapped, self).setup(timeout)
+
+    def pose_cb(self, pose_msg):
+        self.pose = pose_msg
+        self.pose_rcv = True
+        covariance = self.pose.pose.covariance
+        rospy.loginfo("\n%s",np.array(covariance).reshape(6,6))
+
+    def reset(self):
+        pass
+
+    def initialise(self):
+        return super(NotKidnapped, self).initialise()
+    
+    def update(self):
+        # index 1 = uncertainty in x
+        # index 7 = uncertainty in y
+        # final index = uncertainty in z-rotation
+        low_cov = (0.0014848754549490195, -7.93474742977196e-06, 0.0, 0.0, 0.0, 0.0, -7.934747433324674e-06, 0.015494525441120288, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.004123908494110791)
+        high_cov = (0.039370549659337506, -0.010388675767197597, 0.0, 0.0, 0.0, 0.0, -0.010388675767197597, 0.021546009985087267, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01857535537232525)
+        if not self.pose_rcv:
+            return pt.common.Status.SUCCESS
+
+        else:
+            
+            return pt.common.Status.SUCCESS
+
+        
 
 
 if __name__ == "__main__":
