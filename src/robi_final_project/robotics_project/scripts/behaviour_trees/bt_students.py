@@ -20,58 +20,32 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
         rospy.loginfo("Initialising behaviour tree")
 
-        # # go to door until at door
-        # b0 = pt.composites.Selector(
-        #   name="Go to door fallback", 
-        #   children=[counter(30, "At door?"), go("Go to door!", 1, 0)]
-        # )
-        # # tuck the arm
-        # b1 = tuckarm()
-
-        # # go to table
-        # b2 = pt.composites.Selector(
-        #   name="Go to table fallback",
-        #   children=[counter(5, "At table?"), go("Go to table!", 0, -1)]
-        # )
-
-        # # move to chair
-        # b3 = pt.composites.Selector(
-        #   name="Go to chair fallback",
-        #   children=[counter(13, "At chair?"), go("Go to chair!", 1, 0)]
-        # )
-
-        # # lower head
-        # b4 = movehead("down")
-
-        # # become the tree
-        # tree = RSequence(name="Main sequence", children=[b0, b1, b2, b3, b4])
-        
         tuck_arm = TuckArm()
 
         mh_down = MoveHeadBehavior("down")
         mh_up = MoveHeadBehavior("up")
-        mh_up2 = MoveHeadBehavior("up")
 
-        localize = Localize()
+        pose = "pick"
+
+        generate_particles = GenerateParticles()
+
+        clear_costmaps = ClearCostmaps()
 
         rotate = pt.composites.Selector(
             name="Rotate",
             children=[counter(60, "Rotated?"), go("Rotate!", 0, 1)]
         )
 
-        mtpickp = Navigation("pick")
+        mtpickp = Navigation(pose)
 
         pick_cube = PickCube()
 
-        # b3 = pt.composites.Selector(
-        #     name="Back up to table",
-        #     children=[counter(40, "At table?"), go("Back up to table!", -1, 0)]
-        # )
+        mh_up2 = MoveHeadBehavior("up")
 
-        # b4 = pt.composites.Selector(
-        #     name="Turn towards table",
-        #     children=[counter(30, "Facing table?"), go("Turn towards table!", 0, 1)]
-        # )
+        rotate2 = pt.composites.Selector(
+            name="Rotate",
+            children=[counter(60, "Rotated?"), go("Rotate!", 0, 1)]
+        )
 
         mtplacep = Navigation("place")
 
@@ -79,31 +53,33 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
         detect_cube = DetectCube()
 
-        go_back = pt.composites.Selector(
-            name="Back up to table",
-            children=[counter(40, "At table?"), go("Back up to table!", -1, 0)]
-        )
+        # go_back = pt.composites.Selector(
+        #     name="Back up to table",
+        #     children=[counter(40, "At table?"), go("Back up to table!", -1, 0)]
+        # )
 
-        rotate_back = pt.composites.Selector(
-            name="Turn towards table",
-            children=[counter(30, "Facing table?"), go("Turn towards table!", 0, 1)]
-        )
+        # rotate_back = pt.composites.Selector(
+        #     name="Turn towards table",
+        #     children=[counter(30, "Facing table?"), go("Turn towards table!", 0, 1)]
+        # )
 
-        back_to_table = RSequence(name="Move back", children=[go_back, rotate_back])
+        # back_to_table = RSequence(name="Move back", children=[go_back, rotate_back])
 
-        conditional_reset = pt.composites.Selector(name="Coditional Reset", children=[detect_cube, back_to_table])
+        # conditional_reset = pt.composites.Selector(name="Coditional Reset", children=[detect_cube, back_to_table])
 
         end_behavior = EndBehavior()
 
         tree = RSequence(name="Main sequence", children=[
             tuck_arm,
             mh_up,
-            localize,
+            generate_particles,
+            clear_costmaps,
             rotate,
             mtpickp,
             mh_down,
             pick_cube,
             mh_up2,
+            rotate2,
             mtplacep,
             place_cube])
         #tree = RSequence(name="Main sequence", children=[b0, btest])
@@ -451,7 +427,6 @@ class Navigation(pt.behaviour.Behaviour):
     def setup(self, timeout):
         # Get rosparams
         self.pose_top = rospy.get_param(rospy.get_name() + self.param_name)
-        self.clear_costmap_srv_nm = rospy.get_param(rospy.get_name() + '/clear_costmaps_srv')
 
         # Set up action servers
         self.move_base_ac = SimpleActionClient("/move_base", MoveBaseAction)
@@ -459,11 +434,6 @@ class Navigation(pt.behaviour.Behaviour):
         # Set up subscriber
         self.pose_rcv = False
         self.pose_subs = rospy.Subscriber(self.pose_top, PoseStamped, self.pose_cb)
-
-        # Get rosparams
-        # Wait for servers
-        rospy.wait_for_service(self.clear_costmap_srv_nm, timeout=30)
-        self.clear_costmap = rospy.ServiceProxy(self.clear_costmap_srv_nm, Empty)
 
         # execution
         self.done = False
@@ -483,8 +453,6 @@ class Navigation(pt.behaviour.Behaviour):
             if not rospy.is_shutdown() and not self.pose_rcv:
                 rospy.loginfo("%s: Waiting for the %s pose in movetoplacepose behaviour", self.node_name, self.to)
                 return pt.common.Status.RUNNING
-            
-            self.clear_costmap()
 
             mbgoal = MoveBaseGoal(target_pose=self.pose)
             
@@ -575,7 +543,7 @@ class EndBehavior(pt.behaviour.Behaviour):
         sys.exit()
         return pt.common.Status.RUNNING
 
-class Localize(pt.behaviour.Behaviour):
+class GenerateParticles(pt.behaviour.Behaviour):
 
     """
     Updates measurements
@@ -583,28 +551,28 @@ class Localize(pt.behaviour.Behaviour):
 
     def __init__(self):
 
-        rospy.loginfo("Initialising localization behaviour.")
+        rospy.loginfo("Initialising generate particles behaviour.")
         
         self.node_name = "BT Student"
 
         # become a behaviour
-        super(Localize, self).__init__("Localize!")
+        super(GenerateParticles, self).__init__("Generate particles!")
 
     def setup(self, timeout):
         # Get rosparams
-        self.service_name = rospy.get_param(rospy.get_name() + '/global_loc_srv')
+        self.particle_service_name = rospy.get_param(rospy.get_name() + '/global_loc_srv')
 
         # Wait for servers
-        rospy.wait_for_service(self.service_name, timeout=30)
-        self.service = rospy.ServiceProxy(self.service_name, Empty)
+        rospy.wait_for_service(self.particle_service_name, timeout=30)
+        self.particle_service = rospy.ServiceProxy(self.particle_service_name, Empty)
 
         # execution checker
         self.done = False
         
-        return super(Localize, self).setup(timeout)
+        return super(GenerateParticles, self).setup(timeout)
 
     def initialise(self):
-        return super(Localize, self).initialise()
+        return super(GenerateParticles, self).initialise()
     
     def update(self):
         if self.done:
@@ -614,7 +582,52 @@ class Localize(pt.behaviour.Behaviour):
         elif not self.done:
 
             # command
-            self.req = self.service()
+            self.req = self.particle_service()
+            self.done = True
+
+            # tell the tree you're running
+            return pt.common.Status.RUNNING
+
+class ClearCostmaps(pt.behaviour.Behaviour):
+
+    """
+    Updates measurements
+    """
+
+    def __init__(self):
+
+        rospy.loginfo("Initialising clear costmaps behaviour.")
+        
+        self.node_name = "BT Student"
+
+        # become a behaviour
+        super(ClearCostmaps, self).__init__("Clear Costmaps!")
+
+    def setup(self, timeout):
+        # Get rosparams
+        self.clear_costmap_srv_nm = rospy.get_param(rospy.get_name() + '/clear_costmaps_srv')
+
+        # Wait for services
+        rospy.wait_for_service(self.clear_costmap_srv_nm, timeout=30)
+        self.clear_costmap = rospy.ServiceProxy(self.clear_costmap_srv_nm, Empty)
+
+        # execution checker
+        self.done = False
+        
+        return super(ClearCostmaps, self).setup(timeout)
+
+    def initialise(self):
+        return super(ClearCostmaps, self).initialise()
+    
+    def update(self):
+        if self.done:
+            return pt.common.Status.SUCCESS
+        
+        # try if not tried
+        elif not self.done:
+
+            # command
+            self.req = self.clear_costmap()
             self.done = True
 
             # tell the tree you're running
