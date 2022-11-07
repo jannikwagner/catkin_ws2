@@ -22,7 +22,6 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
         tuck_arm = TuckArm()
 
-        mh_down = MoveHeadBehavior("down")
         mh_up = MoveHeadBehavior("up")
 
         pose = "pick"
@@ -31,41 +30,51 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
         clear_costmaps = ClearCostmaps()
 
+        r1_counter = counter(60, "Rotated?")
         rotate = pt.composites.Selector(
             name="Rotate",
-            children=[counter(60, "Rotated?"), Go("Rotate!", 0, 1)]
+            children=[r1_counter, Go("Rotate!", 0, 1)]
         )
 
         mtpickp = Navigation(pose)
+
+        mh_down = MoveHeadBehavior("down")
 
         pick_cube = PickCube()
 
         mh_up2 = MoveHeadBehavior("up")
 
+        r2_counter = counter(60, "Rotated?")
         rotate2 = pt.composites.Selector(
             name="Rotate",
-            children=[counter(60, "Rotated?"), Go("Rotate!", 0, 1)]
+            children=[r2_counter, Go("Rotate!", 0, 1)]
         )
 
         mtplacep = Navigation("place")
 
         place_cube = PlaceCube()
 
+        mh_down2 = MoveHeadBehavior("down")
+
         detect_cube = DetectCube()
 
-        # go_back = pt.composites.Selector(
-        #     name="Back up to table",
-        #     children=[counter(40, "At table?"), go("Back up to table!", -1, 0)]
-        # )
+        reset_from_2 = ResetBehavior([
+            tuck_arm,
+            mh_up,
+            # generate_particles,
+            # clear_costmaps,
+            r1_counter,
+            mtpickp,
+            mh_down,
+            pick_cube,
+            mh_up2,
+            r2_counter,
+            mtplacep,
+            mh_down2,
+            place_cube,
+            detect_cube])
 
-        # rotate_back = pt.composites.Selector(
-        #     name="Turn towards table",
-        #     children=[counter(30, "Facing table?"), go("Turn towards table!", 0, 1)]
-        # )
-
-        # back_to_table = RSequence(name="Move back", children=[go_back, rotate_back])
-
-        # conditional_reset = pt.composites.Selector(name="Coditional Reset", children=[detect_cube, back_to_table])
+        conditional_reset = pt.composites.Selector(name="Coditional Reset", children=[detect_cube, reset_from_2])
 
         end_behavior = EndBehavior()
 
@@ -81,7 +90,9 @@ class BehaviourTree(ptr.trees.BehaviourTree):
             mh_up2,
             rotate2,
             mtplacep,
-            place_cube])
+            mh_down2,
+            place_cube,
+            conditional_reset])
         #tree = RSequence(name="Main sequence", children=[b0, btest])
         super(BehaviourTree, self).__init__(tree)
 
@@ -714,6 +725,42 @@ class ClearCostmaps(pt.behaviour.Behaviour):
 
             # tell the tree you're running
             return pt.common.Status.RUNNING
+
+
+class ResetBehavior(pt.behaviour.Behaviour):
+    """
+    Reset
+    """
+
+    def __init__(self, behaviors):
+
+        rospy.loginfo("Initialising ResetBehavior behaviour.")
+        
+        self.node_name = "BT Student"
+        self.behaviors = behaviors
+
+        # become a behaviour
+        super(ResetBehavior, self).__init__("ResetBehavior!")
+
+    def setup(self, timeout):
+        # execution checker
+        self.reset()
+        
+        return super(ResetBehavior, self).setup(timeout)
+
+    def reset(self):
+        pass
+
+    def initialise(self):
+        return super(ResetBehavior, self).initialise()
+    
+    def update(self):
+        print("resetting")
+        for behavior in self.behaviors:
+            behavior.reset()
+
+        # tell the tree you're running
+        return pt.common.Status.RUNNING
 
 
 if __name__ == "__main__":
