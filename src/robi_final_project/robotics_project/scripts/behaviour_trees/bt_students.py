@@ -32,7 +32,24 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
         clear_costmaps = ClearCostmaps()
 
-        r1_counter = counter(60, "Rotated?")
+        kidnap_check = NotKidnapped()
+
+        reset_filters = pt.composites.Selector(
+            name = "Recovery sequence",
+            children = [counter(1, "Reset?"), ResetBehavior([generate_particles])]
+        )
+
+        relocalise = pt.composites.Sequence(
+            name = "Reset then rotate",
+            children = [reset_filters, Go("Rotate", 0, 1)]
+        )
+
+        kidnap_fallback = pt.composites.Selector(
+            name = "Kidnap fallback",
+            children = [kidnap_check, relocalise]
+        )
+
+        r1_counter = counter(80, "Rotated?")
         rotate = pt.composites.Selector(
             name="Rotate",
             children=[r1_counter, Go("Rotate!", 0, 1)]
@@ -46,7 +63,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
         mh_up2 = MoveHeadBehavior("up")
 
-        r2_counter = counter(60, "Rotated?")
+        r2_counter = counter(80, "Rotated?")
         rotate2 = pt.composites.Selector(
             name="Rotate",
             children=[r2_counter, Go("Rotate!", 0, 1)]
@@ -78,17 +95,15 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
         conditional_reset = pt.composites.Selector(name="Coditional Reset", children=[detect_cube, reset_from_2])
 
-        kidnap_check = NotKidnapped()
-
         end_behavior = EndBehavior()
 
         tree = RSequence(name="Main sequence", children=[
-            kidnap_check,
             tuck_arm,
             mh_up,
             generate_particles,
             clear_costmaps,
             rotate,
+            kidnap_fallback,
             mtpickp,
             mh_down,
             pick_cube,
@@ -442,7 +457,7 @@ class DetectCube(pt.behaviour.Behaviour):
 
     def detect_cb(self, *args):
         # if position is published, it is detected
-        rospy.loginfo("detect callback")
+        #rospy.loginfo("detect callback")
         self.detected = True
     
     def setup(self, timeout):
@@ -794,8 +809,9 @@ class NotKidnapped(pt.behaviour.Behaviour):
     def pose_cb(self, pose_msg):
         self.pose = pose_msg
         self.pose_rcv = True
-        covariance = self.pose.pose.covariance
-        rospy.loginfo("\n%s",np.array(covariance).reshape(6,6))
+        self.covariance = np.array(self.pose.pose.covariance).reshape(6,6)
+        self.mean_uncertainty = np.mean((self.covariance[0,0], self.covariance[1,1], self.covariance[5,5]))
+        
 
     def reset(self):
         pass
@@ -804,17 +820,17 @@ class NotKidnapped(pt.behaviour.Behaviour):
         return super(NotKidnapped, self).initialise()
     
     def update(self):
-        # index 1 = uncertainty in x
-        # index 7 = uncertainty in y
-        # final index = uncertainty in z-rotation
         low_cov = (0.0014848754549490195, -7.93474742977196e-06, 0.0, 0.0, 0.0, 0.0, -7.934747433324674e-06, 0.015494525441120288, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.004123908494110791)
         high_cov = (0.039370549659337506, -0.010388675767197597, 0.0, 0.0, 0.0, 0.0, -0.010388675767197597, 0.021546009985087267, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01857535537232525)
         if not self.pose_rcv:
             return pt.common.Status.SUCCESS
 
-        else:
-            
-            return pt.common.Status.SUCCESS
+        #rospy.loginfo("\n Mean uncertainty is %s", self.mean_uncertainty)
+        if self.mean_uncertainty > 0.02:
+            rospy.loginfo("I HAVE BEEN KIDNAPPED!!!")
+            return pt.common.Status.FAILURE
+        
+        return pt.common.Status.SUCCESS
 
         
 
