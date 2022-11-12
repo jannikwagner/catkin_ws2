@@ -26,42 +26,40 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
         mh_up = MoveHeadBehavior("up")
 
-        pose = "pick"
-
         generate_particles = GenerateParticles()
 
         clear_costmaps = ClearCostmaps()
 
         kidnap_check = NotKidnapped()
-
-        reset_filters = pt.composites.Selector(
-            name = "Recovery sequence",
-            children = [counter(1, "Reset?"), ResetBehavior([generate_particles])]
-        )
-
-        relocalise = pt.composites.Sequence(
-            name = "Reset then rotate",
-            children = [reset_filters, Go("Rotate", 0, 1)]
-        )
-
-        kidnap_fallback = pt.composites.Selector(
-            name = "Kidnap fallback",
-            children = [kidnap_check, relocalise]
-        )
-
+        
         r1_counter = counter(80, "Rotated?")
         rotate = pt.composites.Selector(
             name="Rotate",
             children=[r1_counter, Go("Rotate!", 0, 1)]
         )
+        localize = pt.composites.Sequence(name="Localize", children=[mh_up, generate_particles, clear_costmaps, rotate])
+        reset_localize = ResetBehavior([kidnap_check, mh_up, generate_particles, clear_costmaps, r1_counter])
 
-        mtpickp = Navigation(pose)
+        resetting_localize = pt.composites.Sequence(name="Resetting Localize", children=[localize, reset_localize])
+
+        kidnap_fallback = pt.composites.Selector(
+            name = "Kidnap fallback",
+            children = [kidnap_check, resetting_localize]
+        )
+
+        mtpickp = Navigation("pick")
 
         mh_down = MoveHeadBehavior("down")
 
         pick_cube = PickCube()
 
         mh_up2 = MoveHeadBehavior("up")
+
+        back_counter = counter(20, "Went Back?")
+        go_back = pt.composites.Selector(
+            name="back",
+            children=[back_counter, Go("Back!", -1, 0)]
+        )
 
         r2_counter = counter(80, "Rotated?")
         rotate2 = pt.composites.Selector(
@@ -87,6 +85,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
             mh_down,
             pick_cube,
             mh_up2,
+            back_counter,
             r2_counter,
             mtplacep,
             mh_down2,
@@ -99,15 +98,12 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
         tree = RSequence(name="Main sequence", children=[
             tuck_arm,
-            mh_up,
-            generate_particles,
-            clear_costmaps,
-            rotate,
             kidnap_fallback,
             mtpickp,
             mh_down,
             pick_cube,
             mh_up2,
+            go_back,
             rotate2,
             mtplacep,
             mh_down2,
@@ -804,7 +800,64 @@ class NotKidnapped(pt.behaviour.Behaviour):
         self.estimate_subs = rospy.Subscriber(self.estimate_top, PoseWithCovarianceStamped, self.pose_cb)
         self.pose_rcv = False
 
+        self.kidnapped = True  # TRICK TO LOCALIZE IN BEGINNING
+
         return super(NotKidnapped, self).setup(timeout)
+
+    def pose_cb(self, pose_msg):
+        self.pose = pose_msg
+        self.pose_rcv = True
+        self.covariance = np.array(self.pose.pose.covariance).reshape(6,6)
+        self.mean_uncertainty = np.mean((self.covariance[0,0], self.covariance[1,1], self.covariance[5,5]))
+        
+
+    def reset(self):
+        self.kidnapped = False
+
+    def initialise(self):
+        return super(NotKidnapped, self).initialise()
+    
+    def update(self):
+        low_cov = (0.0014848754549490195, -7.93474742977196e-06, 0.0, 0.0, 0.0, 0.0, -7.934747433324674e-06, 0.015494525441120288, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.004123908494110791)
+        high_cov = (0.039370549659337506, -0.010388675767197597, 0.0, 0.0, 0.0, 0.0, -0.010388675767197597, 0.021546009985087267, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01857535537232525)
+        if not self.pose_rcv:
+            return pt.common.Status.RUNNING
+        
+        if self.kidnapped:
+            return pt.common.Status.FAILURE
+
+        #rospy.loginfo("\n Mean uncertainty is %s", self.mean_uncertainty)
+        if self.mean_uncertainty > 0.02:
+            rospy.loginfo("I HAVE BEEN KIDNAPPED!!!")
+            self.kidnapped = True
+            return pt.common.Status.FAILURE
+        
+        return pt.common.Status.SUCCESS
+
+        
+class NotKidnappedNonMemory(pt.behaviour.Behaviour):
+    """
+    Reset
+    """
+
+    def __init__(self):
+
+        rospy.loginfo("Initialising NotKidnapped behaviour.")
+        
+        self.node_name = "BT Student"
+
+        # become a behaviour
+        super(NotKidnappedNonMemory, self).__init__("NotKidnapped!")
+
+    def setup(self, timeout):
+        # Get rosparams
+        self.estimate_top = rospy.get_param(rospy.get_name() + "/amcl_estimate")
+
+        # Set up subscriber
+        self.estimate_subs = rospy.Subscriber(self.estimate_top, PoseWithCovarianceStamped, self.pose_cb)
+        self.pose_rcv = False
+
+        return super(NotKidnappedNonMemory, self).setup(timeout)
 
     def pose_cb(self, pose_msg):
         self.pose = pose_msg
@@ -817,7 +870,7 @@ class NotKidnapped(pt.behaviour.Behaviour):
         pass
 
     def initialise(self):
-        return super(NotKidnapped, self).initialise()
+        return super(NotKidnappedNonMemory, self).initialise()
     
     def update(self):
         low_cov = (0.0014848754549490195, -7.93474742977196e-06, 0.0, 0.0, 0.0, 0.0, -7.934747433324674e-06, 0.015494525441120288, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.004123908494110791)
