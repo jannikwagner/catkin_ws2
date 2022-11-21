@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import time
 import py_trees as pt, py_trees_ros as ptr, rospy
 from reactive_sequence import RSequence
 import sys
@@ -37,7 +38,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
             name="Rotate",
             children=[r1_counter, Go("Rotate!", 0, 1)]
         )
-        localize = pt.composites.Sequence(name="Localize", children=[mh_up, generate_particles, clear_costmaps, rotate])
+        localize = pt.composites.Sequence(name="Localize", children=[generate_particles, clear_costmaps, rotate])
         reset_localize = ResetBehavior([kidnap_check, mh_up, generate_particles, clear_costmaps, r1_counter])
 
         resetting_localize = pt.composites.Sequence(name="Resetting Localize", children=[localize, reset_localize])
@@ -75,6 +76,12 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
         detect_cube = DetectCube()
 
+        back_counter2 = counter(20, "Went Back?")
+        go_back2 = pt.composites.Selector(
+            name="back",
+            children=[back_counter2, Go("Back!", -1, 0)]
+        )
+
         reset_from_2 = ResetBehavior([
             tuck_arm,
             mh_up,
@@ -90,14 +97,18 @@ class BehaviourTree(ptr.trees.BehaviourTree):
             mtplacep,
             mh_down2,
             place_cube,
-            detect_cube])
+            detect_cube,
+            back_counter2])
 
-        conditional_reset = pt.composites.Selector(name="Coditional Reset", children=[detect_cube, reset_from_2])
+        reset_sequence = pt.composites.Sequence("go_back2", children=[go_back2, reset_from_2])
+
+        conditional_reset = pt.composites.Selector(name="Coditional Reset", children=[detect_cube, reset_sequence])
 
         end_behavior = EndBehavior()
 
         tree = RSequence(name="Main sequence", children=[
             tuck_arm,
+            mh_up,
             kidnap_fallback,
             mtpickp,
             mh_down,
@@ -427,7 +438,10 @@ class PlaceCube(pt.behaviour.Behaviour):
         elif not self.place_srv_req.success:
             rospy.loginfo("%s: Place failed!", self.node_name)
 
-            return pt.common.Status.FAILURE
+            return pt.common.Status.SUCCESS  # we want to continue to the reset afterward.
+            # this is rather hacky, correct alternatives would be to add a conditional reset
+            # to the place cube behavior. Either by creating a new one or including this
+            # behavior in a sequence with detect_cube in the existing conditional reset.
 
         # if still trying - should never be the case
         else:
@@ -522,6 +536,7 @@ class Navigation(pt.behaviour.Behaviour):
         self.pose_subs = rospy.Subscriber(self.pose_top, PoseStamped, self.pose_cb)
 
         # execution
+        self.pose_rcv = False
         self.reset()
 
         return super(Navigation, self).setup(timeout)
@@ -529,7 +544,6 @@ class Navigation(pt.behaviour.Behaviour):
     def reset(self):
         self.done = False
         self.started = False
-        self.pose_rcv = False
 
     def pose_cb(self, pose_msg):
         self.pose = pose_msg
@@ -541,7 +555,7 @@ class Navigation(pt.behaviour.Behaviour):
         
         if not self.started:
             if not rospy.is_shutdown() and not self.pose_rcv:
-                rospy.loginfo("%s: Waiting for the %s pose in movetoplacepose behaviour", self.node_name, self.to)
+                rospy.loginfo("%s: Waiting for the %s pose in Navigatiion behaviour", self.node_name, self.to)
                 return pt.common.Status.RUNNING
 
             mbgoal = MoveBaseGoal(target_pose=self.pose)
@@ -601,6 +615,7 @@ class MoveHeadBehavior(pt.behaviour.Behaviour):
 
         # try if not tried
         elif not self.tried:
+            self.t0 = time.time()
 
             # command
             self.req = self.move_head_srv(self.direction)
@@ -611,8 +626,11 @@ class MoveHeadBehavior(pt.behaviour.Behaviour):
 
         # if succesful
         elif self.req.success:
-            self.done = True
-            return pt.common.Status.SUCCESS
+            t1 = time.time()
+            if t1-self.t0>2:
+                self.done = True
+                return pt.common.Status.SUCCESS
+            return pt.common.Status.RUNNING
 
         # if failed
         elif not self.req.success:
@@ -789,6 +807,8 @@ class NotKidnapped(pt.behaviour.Behaviour):
         
         self.node_name = "BT Student"
 
+        self.VARIANCE_THRESHOLD = 0.02
+
         # become a behaviour
         super(NotKidnapped, self).__init__("NotKidnapped!")
 
@@ -827,13 +847,12 @@ class NotKidnapped(pt.behaviour.Behaviour):
             return pt.common.Status.FAILURE
 
         #rospy.loginfo("\n Mean uncertainty is %s", self.mean_uncertainty)
-        if self.mean_uncertainty > 0.02:
+        if self.mean_uncertainty > self.VARIANCE_THRESHOLD:
             rospy.loginfo("I HAVE BEEN KIDNAPPED!!!")
             self.kidnapped = True
             return pt.common.Status.FAILURE
         
         return pt.common.Status.SUCCESS
-
         
 class NotKidnappedNonMemory(pt.behaviour.Behaviour):
     """
